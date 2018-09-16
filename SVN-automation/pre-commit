@@ -1,0 +1,10 @@
+#!/bin/sh
+
+REPOS="$1"
+TXN="$2"
+AUTHOR=""
+MESSAGE=""
+
+echo "svn automation Pre Commit $TXN in [$REPOS]"
+
+./home/control/pre_check.sh "$AUTHOR" "$TXN" "$REPOS" "repo1" "$MESSAGE" >> ./home/control/precheck.log

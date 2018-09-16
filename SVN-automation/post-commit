@@ -1,0 +1,11 @@
+#!/bin/sh
+
+REPOS="$1"
+REV="$2"
+AUTHOR="$(svnlook author -r $REV $REPOS)"
+MESSAGE="$(svnlook propget --revprop -r $REV $REPOS svn:log)"
+
+#mailer.py commit "$REPOS" "$REV" /path/to/mailer.confa
+echo "svn automation Previous Commit $AUTHOR $REV in [$REPOS]"
+
+./home/control/check.sh "$AUTHOR" "$REV" "$REPOS" "repo1" "$MESSAGE" >> ./home/control/check.log

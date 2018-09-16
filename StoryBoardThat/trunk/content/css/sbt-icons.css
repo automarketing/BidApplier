@@ -1,0 +1,446 @@
+﻿@charset "UTF-8";
+
+@font-face
+{
+    font-family: "sbt-icons";
+    src: url("/content/fonts/sbt-icons/sbt-icons.eot?version=4-19-17-b");
+    src: url("/content/fonts/sbt-icons/sbt-icons.eot?#iefix") format("embedded-opentype"), 
+        url("/content/fonts/sbt-icons/sbt-icons.woff?version=4-19-17-b") format("woff"), 
+        url("/content/fonts/sbt-icons/sbt-icons.ttf?version=4-19-17-b") format("truetype"), 
+        url("/content/fonts/sbt-icons/sbt-icons.svg#sbt-icons?version=4-19-17-b") format("svg");
+    font-weight: normal;
+    font-style: normal;
+}
+
+[data-icon]:before
+{
+    font-family: "sbt-icons" !important;
+    content: attr(data-icon);
+    font-style: normal !important;
+    font-weight: normal !important;
+    font-variant: normal !important;
+    text-transform: none !important;
+    speak: none;
+    line-height: 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+[class^="isbt-"]:before,
+[class*=" isbt-"]:before
+{
+    font-family: "sbt-icons" !important;
+    font-style: normal !important;
+    font-weight: normal !important;
+    font-variant: normal !important;
+    text-transform: none !important;
+    speak: none;
+    line-height: 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.isbt-twitter:before
+{
+    content: "\66";
+}
+
+.isbt-google:before
+{
+    content: "\6a";
+}
+
+.isbt-teacher:before
+{
+    content: "\6b";
+}
+
+.isbt-dashboard:before
+{
+    content: "\63";
+}
+
+.isbt-delete:before
+{
+    content: "\6d";
+}
+
+.isbt-slide-show:before
+{
+    content: "\67";
+}
+
+.isbt-power-point:before
+{
+    content: "\71";
+}
+
+.isbt-pencil:before
+{
+    content: "\73";
+}
+
+.isbt-question-mark:before
+{
+    content: "\74";
+}
+
+.isbt-move-cells:before
+{
+    content: "\78";
+}
+
+.isbt-grid:before
+{
+    content: "\79";
+}
+
+.isbt-undo:before
+{
+    content: "\41";
+}
+
+.isbt-redo:before
+{
+    content: "\42";
+}
+
+.isbt-reports:before
+{
+    content: "\44";
+}
+
+.isbt-smiley:before
+{
+    content: "\47";
+}
+
+.isbt-embed:before
+{
+    content: "\48";
+}
+
+.isbt-lock:before
+{
+    content: "\49";
+}
+
+.isbt-users:before
+{
+    content: "\4a";
+}
+
+.isbt-facebook:before
+{
+    content: "\65";
+}
+
+.isbt-eye:before
+{
+    content: "\4b";
+}
+
+.isbt-revision-edit:before
+{
+    content: "\4e";
+}
+
+.isbt-revisions-view:before
+{
+    content: "\4d";
+}
+
+.isbt-pinterest:before
+{
+    content: "\43";
+}
+
+.isbt-linkedin:before
+{
+    content: "\51";
+}
+
+.isbt-singleuser:before
+{
+    content: "\52";
+}
+
+.isbt-triangle:before
+{
+    content: "\4f";
+}
+
+.isbt-magnifyingglass:before
+{
+    content: "\53";
+}
+
+.isbt-magnifyingglass-minus:before
+{
+    content: "\54";
+}
+
+.isbt-magnifyingglass-plus:before
+{
+    content: "\55";
+}
+
+.isbt-bulletedlist:before
+{
+    content: "\56";
+}
+
+.isbt-rightaligned:before
+{
+    content: "\57";
+}
+
+.isbt-leftaligned:before
+{
+    content: "\58";
+}
+
+.isbt-centeraligned:before
+{
+    content: "\59";
+}
+
+.isbt-horizontallines:before
+{
+    content: "\30";
+}
+
+.isbt-cellsize:before
+{
+    content: "\77";
+}
+
+.isbt-recordcircle:before
+{
+    content: "\31";
+}
+
+.isbt-caratup:before
+{
+    content: "\33";
+}
+
+.isbt-stop:before
+{
+    content: "\34";
+}
+
+.isbt-caratdown:before
+{
+    content: "\32";
+}
+
+.isbt-copy:before
+{
+    content: "\38";
+}
+
+.isbt-addcell:before
+{
+    content: "\6f";
+}
+
+.isbt-new:before
+{
+    content: "\76";
+}
+
+.isbt-contact-us:before
+{
+    content: "\68";
+}
+
+.isbt-corporate:before
+{
+    content: "\62";
+}
+
+.isbt-greetingcard:before
+{
+    content: "\64";
+}
+
+.isbt-folder:before
+{
+    content: "\72";
+}
+
+.isbt-edit:before
+{
+    content: "\6c";
+}
+
+.isbt-download:before
+{
+    content: "\39";
+}
+
+.isbt-layout:before
+{
+    content: "\45";
+}
+
+.isbt-pdf:before
+{
+    content: "\75";
+}
+
+.isbt-print:before
+{
+    content: "\46";
+}
+
+.isbt-storyboards:before
+{
+    content: "\69";
+}
+
+.isbt-save:before
+{
+    content: "\4c";
+}
+
+.isbt-record:before
+{
+    content: "\70";
+}
+
+.isbt-instagram:before
+{
+    content: "\6e";
+}
+
+.isbt-quotes-close:before
+{
+    content: "\7a";
+}
+
+.isbt-quotes-open:before
+{
+    content: "\50";
+}
+
+.isbt-film:before
+{
+    content: "\35";
+}
+
+.isbt-plus:before
+{
+    content: "\5a";
+}
+
+.isbt-arrow-up:before
+{
+    content: "\36";
+}
+
+.isbt-arrow-down:before
+{
+    content: "\37";
+}
+
+.isbt-leftaligned3:before
+{
+    content: "\21";
+}
+
+.isbt-rightaligned3:before
+{
+    content: "\22";
+}
+
+.isbt-twosidedarrow:before
+{
+    content: "\23";
+}
+
+.isbt-underline:before
+{
+    content: "\24";
+}
+
+.isbt-superscript:before
+{
+    content: "\25";
+}
+
+.isbt-subscript:before
+{
+    content: "\26";
+}
+
+.isbt-strikethrough:before
+{
+    content: "\27";
+}
+
+.isbt-texta:before
+{
+    content: "\28";
+}
+
+.isbt-centeraligned3:before
+{
+    content: "\29";
+}
+
+.isbt-tilden:before
+{
+    content: "\2a";
+}
+
+.isbt-unlock:before
+{
+    content: "\2b";
+}
+
+.isbt-alignment:before
+{
+    content: "\2c";
+}
+
+.isbt-strikethroughbig:before
+{
+    content: "\2d";
+}
+
+.isbt-subscriptcenter:before
+{
+    content: "\2e";
+}
+
+.isbt-underlinebig:before
+{
+    content: "\2f";
+}
+
+.isbt-superscriptcenter:before
+{
+    content: "\3a";
+}
+
+.isbt-textaunderline:before
+{
+    content: "\3b";
+}
+
+.isbt-textabigunderline:before
+{
+    content: "\3c";
+}
+
+.isbt-mysettings:before
+{
+    content: "\3d";
+}
+
+.isbt-account-settings:before
+{
+    content: "\3e";
+}

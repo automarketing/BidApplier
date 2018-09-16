@@ -1,0 +1,591 @@
+﻿///  <reference path="../SvgManip.js" />
+
+var PosableTypeEnum =
+    {
+        Character: 1,
+        SmartItem: 2,
+        
+    };
+
+function PosableControlsBox(activeShape, posableType )
+{
+    this.Private_ActiveShape = activeShape;
+    this.Private_PoseAreaSvg = $("#PoseAreaSvg");
+    this.Private_PoseAreaOptions = $("#PoseOptions");
+    this.Private_PositionSwap1 = null;
+    this.Private_PositionSwap2 = null;
+
+    
+    this.Private_PoseWidth = 275;
+    this.Private_PoseHeight = 500;
+    this.Private_PartSize = 45;
+    this.Private_PoseAreaSize_SinglePose = "675px"
+    this.Private_PoseAreaSize_MultiPose = "800px";
+    this.Private_SidePoseHeight = 114;
+    this.Private_SidePoseWidth = 205;
+
+    this.Public_UndoInfo = null;
+
+
+    this.Public_IsCancel = false;
+
+   
+
+    //#region Layout
+
+
+    this.Private_PrepareDialog = function (posableType)
+    {
+        var poseState = this;
+
+        $("#character-poser-title").hide();
+        $("#smart-item-title").hide();
+
+        $("#pose-dialog-update-pose-button").hide();
+        $("#pose-dialog-update-smart-item-button").hide();
+
+        if (posableType == PosableTypeEnum.Character)
+        {
+            $("#character-poser-title").show();
+            $("#pose-dialog-update-pose-button").show();
+        }
+        else if (posableType == PosableTypeEnum.SmartItem)
+        {
+            $("#smart-item-title").show();
+            $("#pose-dialog-update-smart-item-button").show();
+        }
+
+        this.Private_SetPosableSizes();
+        MyPointers.Dialog_PoseImage.one('shown.bs.modal', this.Private_PrepareShapePostModalClosure(poseState));
+
+        this.Private_ShowAdditionalPositions(false);
+        this.Private_PositionSwap1 = this.Private_GetPositionSwapAreas("1");
+        this.Private_PositionSwap2 = this.Private_GetPositionSwapAreas("2");
+
+        this.Private_ResetSvgAreas();
+
+        this.Public_UndoInfo = new Object;
+
+        this.Public_UndoInfo.UndoPosition = activeShape.Position;
+        this.Public_UndoInfo.UndoActivePoseList = activeShape.Public_GetPoseGroupList();
+        this.Public_UndoInfo.UndoPreviousPoseList = activeShape.Public_GetPreviousPoseList();
+
+
+        if (this.Private_ActiveShape.Public_IsInstaPosable())
+            $("#insta-pose-dialog-selector").show();
+        else
+            $("#insta-pose-dialog-selector").hide();
+
+        MyPointers.Dialog_PoseImage.modal();
+        this.Public_IsCancel = false;
+
+
+        this.Private_ResetInstaPoses();
+    };
+
+    this.Private_GetPositionSwapAreas = function (area)
+    {
+        var baseId = "#position-swap-" + area + "-";
+        var helper = new Object();
+
+        helper.SvgArea = $(baseId + "svg");
+        helper.TitleArea = $(baseId + "title");
+        helper.DivArea = $(baseId + "div");
+
+        return helper;
+    };
+
+
+    this.Private_ShowAdditionalPositions = function (showPositions)
+    {
+        var poseAreaSize = $("#PoseAreaSize");
+        var positionDivider = $("#position-divider");
+        var positionChoices = $("#position-choices");
+
+        //var poseAreaSize = showPositions ? "800px" : "675px";
+        if (showPositions)
+        {
+            poseAreaSize.css("width", this.Private_PoseAreaSize_MultiPose);
+            positionDivider.show();
+            positionChoices.show();
+        }
+        else
+        {
+            poseAreaSize.css("width", this.Private_PoseAreaSize_SinglePose);
+            positionDivider.hide();
+            positionChoices.hide();
+        }
+    };
+
+    this.Private_ResetSvgAreas = function ()
+    {
+        this.Private_PoseAreaSvg.children().remove();
+        this.Private_PoseAreaOptions.children().remove();
+
+        this.Private_PositionSwap1.SvgArea.children().remove();
+        this.Private_PositionSwap2.SvgArea.children().remove();
+    };
+
+
+    this.Private_InstaPoseClosure = function (posableControls, instaPose)
+    {
+        return function ()
+        {
+            var poseList = posableControls.Private_ActiveShape.Public_GetPose(instaPose);
+            var poseArray = activeShape.Public_GetSafePoseArray(poseList);
+
+            posableControls.Private_ActiveShape.Public_BulkUpdatePoseGroups(poseArray);
+            posableControls.Private_ActiveShape.Public_SetPreviousPoseList(poseList);
+
+            posableControls.Private_RedrawActiveCharacter();
+        };
+    };
+
+    this.Private_PrepareShapePostModalClosure = function (poseState)
+    {
+        return function (e)
+        {
+            poseState.Private_RedrawActiveCharacter();
+            poseState.Private_DisplayPoseOptions();
+
+            var handleAdditionalPositionsFn = poseState.Private_HandleAdditionalPositions(poseState);
+            MyCharacterPosistionLibrary.GetCharacterPositions(poseState.Private_ActiveShape.GlobalImageId, handleAdditionalPositionsFn);
+        };
+    };
+
+    //this.Private_PrepareShapePostModal = function (e, poseState, activeShape)
+    this.Private_RedrawActiveCharacter = function ()
+    {
+        SvgCloner.CloneSvg("PoseAreaSvg", activeShape.Id, "Poser", this.Private_PoseWidth, this.Private_PoseHeight);
+     
+    };
+
+    this.Private_UpdateColors = function (clonePart)
+    {
+        var regions = this.Private_ActiveShape.ColorableState.Public_GetRegionList();
+        for (var i = 0; i < regions.length; i++)
+        {
+            var region = regions[i];
+            var newColor = this.Private_ActiveShape.ColorableState.Public_GetColorForRegion(region);
+
+
+            var filter = "[id^=" + region + "_]";   //using a true wildcard with * (http://stackoverflow.com/questions/5376431/wildcards-in-jquery-selectors)
+
+            var toBeUpdated = clonePart.find(filter);
+
+            for (var j = 0; j < toBeUpdated.length; j++)
+            {
+                toBeUpdated[j].setAttributeNS(null, "fill", newColor)
+            }
+        }
+    };
+    //#endregion
+
+    //#region Render Positions
+
+
+    this.Private_HandleAdditionalPositions = function (posableControls)
+    {
+        return function (characterPositions)
+        {
+            if (characterPositions == null)
+                return;
+
+            if (characterPositions.length == 1)
+                return;
+
+            posableControls.Private_ShowAdditionalPositions(true);
+
+            var mainPose = 0;
+
+            // make sure we have our positions in order
+            for (var i = 0; i < characterPositions.length; i++)
+            {
+                if (characterPositions[i].Position == posableControls.Private_ActiveShape.Position)
+                    mainPose = characterPositions[i].Order;
+            }
+
+            if (mainPose == 0)
+            {
+                posableControls.Private_AddCharacterPosition(posableControls.Private_PositionSwap1, characterPositions[1]);
+                posableControls.Private_AddCharacterPosition(posableControls.Private_PositionSwap2, characterPositions[2]);
+            }
+            if (mainPose == 1)
+            {
+                posableControls.Private_AddCharacterPosition(posableControls.Private_PositionSwap1, characterPositions[0]);
+                posableControls.Private_AddCharacterPosition(posableControls.Private_PositionSwap2, characterPositions[2]);
+            }
+            if (mainPose == 2)
+            {
+                posableControls.Private_AddCharacterPosition(posableControls.Private_PositionSwap1, characterPositions[1]);
+                posableControls.Private_AddCharacterPosition(posableControls.Private_PositionSwap2, characterPositions[0]);
+            }
+        }
+    };
+
+    this.Private_AddCharacterPosition = function (positionArea, positionObject)
+    {
+        var positionTitle = MyLangMap.GetText("ST-" + positionObject.Title);
+
+        var characterPositionSvg = positionObject.Svg;
+        var position = positionObject.Position;
+
+        var positionId = SbtDataEnum.Id_DisplayOption + "_" + position;
+        var outerGroupId = SbtDataEnum.Id_DisplayOption + "_outer_" + position;
+
+        //var characterPositionSvg = MyCharacterPosistionLibrary.GetCharacterPosition(position);
+
+        var outerSvg = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        outerSvg.setAttribute("id", outerGroupId);
+
+        positionArea.SvgArea.append(outerSvg);
+        var outerSvgJq = $("#" + outerGroupId);
+
+        StoryboardContainer.UpdateGradientIds(outerSvgJq);
+        outerSvgJq.append(characterPositionSvg);
+
+        outerSvgJq.children()[0].setAttributeNS(null, "id", positionId);
+
+        MyShapeMetaData.LookForMetaData(positionId);
+        this.Private_UpdateColors($("#" + positionId));
+
+        positionArea.TitleArea.html(positionTitle);
+        positionArea.DivArea.attr("title", MyLangMap.GetText("text-character-position-change") + " " + positionTitle);
+        //positionArea.DivArea.addClass("Posable-Part-Panel");
+
+        var scaleAndCenterHelper = SbtMath.ScaleAndCenter(outerGroupId, this.Private_SidePoseWidth, this.Private_SidePoseHeight, 5, 5);
+
+        outerSvg.setAttributeNS(null, "transform", "translate(" + scaleAndCenterHelper.CenterX + ", " + scaleAndCenterHelper.CenterY + ") scale(" + scaleAndCenterHelper.Scale + ")");
+        outerSvgJq.parent().attr("width", this.Private_SidePoseWidth + "px");
+        outerSvgJq.parent().attr("height", this.Private_SidePoseHeight + "px");
+
+        //outerSvgJq.parent().addClass("Posable-Part");
+
+        var clickFunction = function (poseControlsBox, position)
+        {
+            return function ()
+            {
+                //var positionObject = MyCharacterPosistionLibrary.GetCharacterPosition(poseControlsBox.Private_ActiveShape.GlobalImageId, position);
+
+                //var activePoseGroups = poseControlsBox.Private_ActiveShape.Public_GetPoseGroups();
+                var activePoseList = poseControlsBox.Private_ActiveShape.Public_GetPoseGroupList();
+                var previousPoseList = poseControlsBox.Private_ActiveShape.Public_GetPreviousPoseList();
+
+                poseControlsBox.Private_ActiveShape.ChangeCharacterPosition(position);
+
+                poseControlsBox.Private_ResetSvgAreas();
+
+                poseControlsBox.Private_DisplayPoseOptions();
+
+                //var activePoseList = new Array();
+
+                //for (var i = 0; i < activePoseGroups.length; i++)
+                //{
+                //    var poseGroup = activePoseGroups[i];
+                //    activePoseList.push({ PoseType: poseGroup.PoseType, PoseId: poseGroup.Public_GetActiveOption().Public_GetInternalId() });
+                //}
+
+
+                var character = poseControlsBox.Private_ActiveShape;
+
+                // handle poses not shown for an angle - IE faces!
+                var previousPoseArray = character.PosableState.Public_GetSafePoseArray(previousPoseList);
+                character.Public_BulkUpdatePoseGroups(previousPoseArray);
+                character.PosableState.Public_SetPreviousPoseList(activePoseList);
+
+                var activePoseArray = character.PosableState.Public_GetSafePoseArray(activePoseList);
+                character.Public_BulkUpdatePoseGroups(activePoseArray);
+
+
+
+
+                poseControlsBox.Private_RedrawActiveCharacter();
+
+                var handleAdditionalPositionsFn = poseControlsBox.Private_HandleAdditionalPositions(poseControlsBox);
+                MyCharacterPosistionLibrary.GetCharacterPositions(poseControlsBox.Private_ActiveShape.GlobalImageId, handleAdditionalPositionsFn);
+
+            }
+        }(this, position);
+
+        positionArea.DivArea.off("click"); // make sure we don't keep re-binding the click handler!
+        positionArea.DivArea.click(clickFunction);
+    };
+    //#endregion
+
+    //#region Render Poses
+
+    this.Private_DisplayPoseOptions = function ()
+    {
+        var htmlPointer = this.Private_PoseAreaOptions;
+
+        htmlPointer.children().remove();
+
+
+        var poseGroups = this.Private_ActiveShape.Public_GetPoseGroups();
+
+        for (var i = 0; i < poseGroups.length; i++)
+        {
+            if (poseGroups[i].PoseType == SbtDataEnum.PoseType_Swap)
+            {
+                this.Private_RenderCharacterSwapPose(htmlPointer, poseGroups[i]);
+            }
+            else if (poseGroups[i].PoseType == SbtDataEnum.PoseType_Tilt)
+            {
+                this.Private_RenderTiltPose(htmlPointer, poseGroups[i]);
+            }
+            else if (poseGroups[i].PoseType == SbtDataEnum.PoseType_LibrarySwap)
+            {
+                this.Private_RenderLibrarySwapPose(htmlPointer, poseGroups[i]);
+            }
+        }
+    }
+
+    this.Private_RenderTiltPose = function (htmlPointer, pose)
+    {
+        htmlPointer.append("<h3 class=\"PosableSelectionTitle\">" + pose.Title + "</h3>");
+        var PoseGroups = pose.Public_GetTiltOptions();
+
+        var wrapperDivId = pose.Title.replaceAll(" ", "") + "_wrapper_div";
+        htmlPointer.append("<div id=\"" + wrapperDivId + "\" class=\"PosableSelectionArea\"></div>");
+
+        var pivotElement = document.getElementById(pose.Public_GetTiltableId());
+        var pivotBBox = pivotElement.getBBox();
+        var pivotX = pivotBBox.x + (pivotBBox.width / 2);
+        var pivotY = pivotBBox.y + (pivotBBox.height / 2);
+
+        var divPointer = $("#" + wrapperDivId);
+
+        var pivotGroup = $("#" + pose.Public_GetPivotId());
+
+        for (var i = 0; i < PoseGroups.length; i++)
+        {
+            var poseOption = PoseGroups[i];
+            var id = (pose.Title + "_" + poseOption.Degrees).replaceAll(" ", "");
+            var divId = id + "_div";
+
+            divPointer.append("<div id=\"" + divId + "\" class=\"PosableSelection\" title=\"" + poseOption.Public_GetTitle() + "\"></div>");
+            var previewAreaDiv = $("#" + divId)
+
+            var clonePart = $("#" + pose.Public_GetTiltableId()).clone();
+            clonePart.attr("transform", "");    //remove any initial tilt
+
+            var svgInfo = this.Private_CloneCenterAndCreateSvg(clonePart, id, previewAreaDiv, poseOption.Degrees, pivotX, pivotY);
+
+            var clone = $("#" + svgInfo.InnerSvgId);
+
+            var childrenToRemove = clone.find("[id*=" + pose.Public_GetClearId() + "]").remove();
+
+            //for (var j = 0; j < childrenToRemove.length; j++)
+            //{
+            //    this.Private_SafeRemove(childrenToRemove[j]);
+            //    //.remove();
+            //}
+
+            var clickFunction = function (posableControls, selectedPose, selectedTiltOption, activeShape)
+            {
+                return function ()
+                {
+                    activeShape.Public_UpdatePoseOption(selectedPose, selectedTiltOption);
+                    posableControls.Private_RedrawActiveCharacter();
+                };
+            }(this, pose, poseOption, this.Private_ActiveShape);
+
+            $("#" + divId).click(clickFunction);
+        }
+
+
+
+    };
+
+    this.Private_RenderLibrarySwapPose = function (htmlPointer, pose)
+    {
+        htmlPointer.append("<h3 class=\"PosableSelectionTitle\">" + pose.Title + "</h3>");
+        var poseOptions = pose.Public_GetLibrarySwapOptions();
+
+        var wrapperDivId = pose.Title.replaceAll(" ", "") + "_wrapper_div";
+        htmlPointer.append("<div id=\"" + wrapperDivId + "\" class=\"PosableSelectionArea\"></div>");
+        var divPointer = $("#" + wrapperDivId);
+        for (var key in poseOptions)
+        {
+            if (poseOptions.hasOwnProperty(key))
+            {
+                var poseOption = poseOptions[key];
+
+                var id = (pose.Title + "_" + poseOption.LibrarySwapId).replaceAll(" ", "");
+                var divId = id + "_div";
+
+                divPointer.append("<div id=\"" + divId + "\" class=\"PosableSelection\" title=\"" + poseOption.Public_GetTitle() + "\"></div>");
+                var previewAreaDiv = $("#" + divId)
+
+                var clonePart = MyGlobalSwapLibrary.Public_GetSvgById(poseOption.LibrarySwapId, this.Private_ActiveShape.Position).clone();
+                this.Private_CloneCenterAndCreateSvg(clonePart, id, previewAreaDiv);
+
+                RecursivelyUpdateChildrenIds(clonePart, SbtDataEnum.GlobalLibraryId, SbtDataEnum.Id_DisplayOption);
+                this.Private_UpdateColors(clonePart);
+
+                var clickFunction = function (posableControls, selectedPose, selectedSwapOption, activeShape)
+                {
+                    return function ()
+                    {
+                        activeShape.Public_UpdatePoseOption(selectedPose, selectedSwapOption);
+                        posableControls.Private_RedrawActiveCharacter();
+                    };
+                }(this, pose, poseOption, this.Private_ActiveShape);
+
+                $("#" + divId).click(clickFunction);
+            }
+        }
+    };
+
+    this.Private_RenderCharacterSwapPose = function (htmlPointer, pose)
+    {
+        htmlPointer.append("<h3 class=\"PosableSelectionTitle\">" + pose.Title + "</h3>");
+        var poseOptions = pose.Public_GetSwapOptions();
+
+        var wrapperDivId = pose.Title.replaceAll(" ", "") + "_wrapper_div";
+        htmlPointer.append("<div id=\"" + wrapperDivId + "\" class=\"PosableSelectionArea\"></div>");
+        var divPointer = $("#" + wrapperDivId);
+
+        for (var key in poseOptions)
+        {
+            if (poseOptions.hasOwnProperty(key))
+            {
+
+                var poseOption = poseOptions[key];
+                var id = pose.Title.replaceAll(" ", "") + "_" + poseOption.Public_GetInternalId();
+                var divId = id + "_div";
+
+                divPointer.append("<div id=\"" + divId + "\" class=\"PosableSelection\" title=\"" + poseOption.Public_GetTitle() + "\"></div>");
+                //divPoint.poseOptions.Title
+
+                var previewAreaDiv = $("#" + divId)
+                var clonePart = poseOption.Public_GetPoseSvg(pose.GlobalImageId).clone();
+                var retVal = this.Private_CloneCenterAndCreateSvg(clonePart, id, previewAreaDiv);
+                clonePart = $("#" + retVal.InnerSvgId);// need to get an updated pointer due to nonsense of ie and needing to smoosh it as a docfragment
+
+                RecursivelyUpdateChildrenIds(clonePart, SbtDataEnum.Id_Storage, SbtDataEnum.Id_DisplayOption);
+                this.Private_UpdateColors(clonePart);
+
+
+                var clickFunction = function (posableControls, selectedPose, selectedSwapOption, activeShape)
+                {
+                    return function ()
+                    {
+                        activeShape.Public_UpdatePoseOption(selectedPose, selectedSwapOption);
+                        posableControls.Private_RedrawActiveCharacter();
+                    };
+                }(this, pose, poseOption, this.Private_ActiveShape);
+
+
+                $("#" + divId).click(clickFunction);
+            }
+        }
+
+    };
+
+    this.Private_CloneCenterAndCreateSvg = function (clonePart, newId, appendTo, rotateDegrees, pivotX, pivotY)
+    {
+        var svgWidth = this.Private_PartSize;
+        var svgHeight = this.Private_PartSize;
+
+        var gtranslateId = newId + "_translate";
+        var swapId = newId + "_swap_part";
+
+        var svg = SvgCreator.CreateBlankSvg(svgWidth, svgHeight);
+        // svg.setAttribute("style", "border: 1px solid black");
+        var g_translate = SvgCreator.CreateSvgGroup(gtranslateId);
+
+        clonePart.appendTo(g_translate); // No idea why g.appendChild(clonePart) fails...
+
+        clonePart = g_translate.lastChild;  // reset pointer - needed for docfragment nonsense
+        clonePart.setAttribute("id", swapId);
+        clonePart.setAttribute("display", "inline");
+
+        svg.appendChild(g_translate);
+
+        appendTo.append(svg);
+
+        var scaleAndCenter = SbtMath.ScaleAndCenter(gtranslateId, svgWidth, svgHeight, 0, 0);
+
+        var translateTag = 'translate(' + (scaleAndCenter.CenterX) + ',' + scaleAndCenter.CenterY + ') scale(' + scaleAndCenter.Scale + ')';
+        if (rotateDegrees != null && pivotX != null && pivotY != null)
+        {
+            translateTag += "rotate(" + rotateDegrees + ", " + pivotX + ", " + pivotY + ")";
+        }
+
+        g_translate.setAttributeNS(null, 'transform', translateTag);
+
+        var retVal = new Object();
+        retVal.InnerSvgId = swapId;
+        //retVal.TranslateSvgId = gtranslateId;
+        ////retVal.Scale = scale;
+        ////retVal.TranslateX = centerX;
+        ////retVal.TranslateY = centerY;
+
+        return retVal;
+    };
+    //#endregion
+
+    this.Private_PrepareDialog(posableType);
+
+}
+
+PosableControlsBox.prototype.Private_SetPosableSizes = function ()
+{
+    var fullsize = $(window).width() > 900;
+    if (fullsize)
+    {
+        this.Private_PoseWidth = 275;
+        this.Private_PoseHeight = 500;
+        this.Private_PartSize = 45;
+        this.Private_PoseAreaSize_SinglePose = "675px"
+        this.Private_PoseAreaSize_MultiPose = "800px";
+        this.Private_SidePoseHeight = 205;
+        this.Private_SidePoseWidth = 114;
+    }
+    else
+    {
+        this.Private_PoseWidth = 200;
+        this.Private_PoseHeight = 392;
+        this.Private_PartSize = 30;
+        this.Private_PoseAreaSize_SinglePose = "590px"
+        this.Private_PoseAreaSize_MultiPose = "590px";
+        this.Private_SidePoseHeight = 156;
+        this.Private_SidePoseWidth = 100;
+    }
+};
+
+PosableControlsBox.prototype.Private_ResetInstaPoses = function ()
+{
+    $("#Pose-Dialog-Angry").off("click");
+    $("#Pose-Dialog-Speaking").off("click");
+    //$("#Pose-Dialog-Explaining").off("click");
+    $("#Pose-Dialog-Sad").off("click");
+    $("#Pose-Dialog-Sleeping").off("click");
+    $("#Pose-Dialog-Complaining").off("click");
+    $("#Pose-Dialog-Holding").off("click");
+    $("#Pose-Dialog-Confusion").off("click");
+    $("#Pose-Dialog-Upset").off("click");
+    $("#Pose-Dialog-Sit").off("click");
+    $("#Pose-Dialog-Determined").off("click");
+    $("#Pose-Dialog-Happy").off("click");
+    $("#Pose-Dialog-Walking").off("click");
+    $("#Pose-Dialog-Shouting").off("click");
+    $("#Pose-Dialog-Scared").off("click");
+
+    $("#Pose-Dialog-Angry").click(this.Private_InstaPoseClosure(this, InstaPoseEnum.Angry));
+    $("#Pose-Dialog-Speaking").click(this.Private_InstaPoseClosure(this, InstaPoseEnum.Speaking));
+    //$("#Pose-Dialog-Explaining").click(this.Private_InstaPoseClosure(this, InstaPoseEnum.Explaining));
+    $("#Pose-Dialog-Sad").click(this.Private_InstaPoseClosure(this, InstaPoseEnum.Sad));
+    $("#Pose-Dialog-Sleeping").click(this.Private_InstaPoseClosure(this, InstaPoseEnum.Sleeping));
+    $("#Pose-Dialog-Complaining").click(this.Private_InstaPoseClosure(this, InstaPoseEnum.Complaining));
+    $("#Pose-Dialog-Holding").click(this.Private_InstaPoseClosure(this, InstaPoseEnum.Holding));
+    $("#Pose-Dialog-Confusion").click(this.Private_InstaPoseClosure(this, InstaPoseEnum.Confusion));
+    $("#Pose-Dialog-Upset").click(this.Private_InstaPoseClosure(this, InstaPoseEnum.Upset));
+    $("#Pose-Dialog-Sit").click(this.Private_InstaPoseClosure(this, InstaPoseEnum.Sit));
+    $("#Pose-Dialog-Determined").click(this.Private_InstaPoseClosure(this, InstaPoseEnum.Determined));
+    $("#Pose-Dialog-Happy").click(this.Private_InstaPoseClosure(this, InstaPoseEnum.Happy));
+    $("#Pose-Dialog-Walking").click(this.Private_InstaPoseClosure(this, InstaPoseEnum.Walking));
+    $("#Pose-Dialog-Shouting").click(this.Private_InstaPoseClosure(this, InstaPoseEnum.Shouting));
+    $("#Pose-Dialog-Scared").click(this.Private_InstaPoseClosure(this, InstaPoseEnum.Scared));
+};

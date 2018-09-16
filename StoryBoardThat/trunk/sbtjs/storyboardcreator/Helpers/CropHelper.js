@@ -1,0 +1,879 @@
+﻿var CropHelper = function ()
+{
+    var CropHelperObject = new Object();
+
+    var Props = new Object();
+
+    Props.CropType = CropTypeEnum.Standard;
+
+    Props.CroppedImageCopyId = "CroppedImageCopy";
+    Props.OriginalShapeId = "";
+
+    Props.CropLeft = 0;
+    Props.CropTop = 0;
+    Props.CropHeight = 0;
+    Props.CropWidth = 0;
+    
+    Props.CropViewScale;
+    Props.ImageWidth = 0;
+    Props.ImageHeight = 0;
+
+    Props.CropAction = "";
+    Props.ResizePageX = 0;
+    Props.ResizePageY = 0;
+    Props.CropResizeDirection = "";
+
+    Props.CircleSizeRatio = 1;
+
+// temp object for co-ordinate convert
+    
+    Props.move_delta = {x: 0 , y:0};
+    Props.rotate_center = { x: 0 , y:0 };
+    Props.rotate_alpha = 0;
+    Props.scale = {x:1 , y:1};
+
+// Advanced parameteres 
+
+    Props.CropPolygonPoint = [{x:0,x:0},{x:150,y:0},{x:150,y:100},{x:0,y:100}];
+    Props.CropPolygonPointSelectedID = "";
+
+// Ecilpse Parameters
+
+    Props.EllipseCX = 75;
+    Props.EllipseCY = 50;
+    Props.EllipseRX = 75;
+    Props.EllipseRY = 50;
+
+    function UpdateEllipsePoints()
+    {
+        Props.EllipseRX = Props.CropWidth  / 2;
+        Props.EllipseRY = Props.CropHeight / 2;
+        Props.EllipseCX = Props.CropLeft + Props.EllipseRX ;
+        Props.EllipseCY = Props.CropTop  + Props.EllipseRY ;
+    };
+    
+
+    function PrepareShapePostModalClosure(activeShape)
+    {
+        return function (e)
+        {
+            PrepareShapePostModal(e, activeShape);
+        };
+    };
+
+    function PrepareShapePostModal(e, activeShape)
+    {
+        //pDos 2017 
+
+        
+        Props.CropAction = "";
+
+
+        var cropAreaSvg = $("#CropAreaSvg");
+
+        var clone = $("#" + activeShape.Id).clone();
+
+        StoryboardContainer.UpdateGradientIds(clone);
+
+        Props.OriginalShapeId = activeShape.Id;
+
+        clone.attr("id", Props.CroppedImageCopyId);
+        clone.attr("class", "");
+
+
+        // Remove selection box and clip-path defs if present
+        clone.find("[id$='selection_box'], [id$='_defs']").remove();
+
+        // If there is a crop-group, reset it
+        clone.find("[id$='cropGroup']").removeAttr("clip-path").attr("id", Props.CroppedImageCopyId + "_cropGroup");
+
+        // Translate the clone by 20px in both directions
+        var scale = clone.find("[id$='_scale']").attr("id", Props.CroppedImageCopyId + "_scale");
+        clone.find("[id$='_natural']").attr("id", Props.CroppedImageCopyId + "_natural");
+
+        var natobj = $("#"+Props.CroppedImageCopyId + "_natural");
+
+
+
+        //scale.attr("transform", "scale(1,1)");
+
+        cropAreaSvg.children().remove();
+
+     
+
+        var bb={width: 0 , height: 0};
+        
+
+        
+        // find cell and copy all object in that cell to this crop window
+        var layoutParts = StoryboardContainer.GetAllLayoutParts(CellConfiguration);
+        var shapeLocation = StoryboardContainer._GetLayoutPartForShape(layoutParts, activeShape);
+        var selectedShapeStates = StoryboardContainer.GetShapeStatesForCell( shapeLocation.Row , shapeLocation.Col );
+
+        var cropAreaSvgObj = document.getElementById("CropAreaSvg");
+   
+        cropAreaSvgObj.appendChild(SvgCreator.AddRect(12, 12, shapeLocation.Width - 2, shapeLocation.Height - 2, "", "white", "", "1", "clippanel"));
+           
+        for (var i = 0; i < selectedShapeStates[StoryboardPartTypeEnum.StoryboardCell].length; i++)
+            {
+
+                var active = selectedShapeStates[StoryboardPartTypeEnum.StoryboardCell][i];
+
+                var areaBox = active.Public_GetImaginaryOuterBox();
+                var w = (areaBox.Right - areaBox.Left ) ;
+                var h = (areaBox.Bottom - areaBox.Top ) ;
+
+                bb.width = Math.max( bb.width , w );
+                bb.height = Math.max( bb.height , h );
+
+                if( active.Id == activeShape.Id ) 
+                {
+                    var B = GetGlobalById(active.Id).getBBox();
+                    Props.move_delta = {x: active.X , y: active.Y };
+                    Props.rotate_center = { x: B.width / 2 , y: B.height / 2 };
+                    Props.rotate_alpha = active.Angle;
+                    Props.scale = { x:active.ScaleX , y:active.ScaleY }; 
+                    continue;
+                }
+
+                var shape = $("#" + active.Id).clone();
+                cropAreaSvg.append(shape);
+                
+            }
+////////////////
+
+        cropAreaSvg.append(clone);
+   
+        var objbox = GetGlobalById(Props.CroppedImageCopyId+"_scale").getBBox();
+        
+
+       // var bb = GetGlobalById(Props.CroppedImageCopyId).getBBox();
+ 
+
+            
+        
+        //Props.CropViewScale = 430 / Math.max(bb.width, bb.height);
+        Props.CropViewScale = 1;
+        //scale.attr("transform", "scale(" + Props.CropViewScale + ")");
+
+        // NO FUCKING clue why this needs to happen here... but the bounding box of the svg is getting moved...  i feel like this happened elsewhere and we solved it...  is it due to bootstrap modal windows? //abs 1/13/14
+        //clone.attr("transform", "translate(10,10)");
+
+   //     bb = GetGlobalById(Props.CroppedImageCopyId).getBBox();
+
+        // initial values
+
+        Props.CropLeft = 0;
+        Props.CropTop = 0;
+        Props.CropWidth = objbox.width;
+        Props.CropHeight = objbox.height;    
+        Props.CropPolygonPoint = [{x:0 , y:0} , { x : 0 , y: objbox.height },{ x : objbox.width , y : objbox.height },{ x : objbox.width , y : 0 }];
+        Props.EllipseRX = Props.CropWidth  / 2;
+        Props.EllipseRY = Props.CropHeight / 2;
+        Props.EllipseCX = Props.CropLeft + Props.EllipseRX ;
+        Props.EllipseCY = Props.CropTop  + Props.EllipseRY ;
+        
+
+        // clipping parameters
+
+       
+        
+        if ( activeShape.UseClipping && activeShape.CropType == Props.CropType )
+        {
+            switch ( activeShape.CropType )
+            {
+                case CropTypeEnum.Circle:
+                case CropTypeEnum.Standard:  
+                        Props.CropLeft = activeShape.ClipX * Props.CropViewScale;
+                        Props.CropTop = activeShape.ClipY * Props.CropViewScale;
+                        Props.CropWidth = activeShape.ClipWidth * Props.CropViewScale;
+                        Props.CropHeight = activeShape.ClipHeight * Props.CropViewScale;
+                        if( activeShape.CropType == CropTypeEnum.Circle )
+                        {
+                            UpdateEllipsePoints();
+                        }
+                    break;
+
+                case CropTypeEnum.Advanced:
+                    if(activeShape.CropPolygonPoint)
+                        for( i = 0 ; i < activeShape.CropPolygonPoint.length ; i++ )
+                        {
+                            Props.CropPolygonPoint[i].x = activeShape.CropPolygonPoint[i].x * Props.CropViewScale;
+                            Props.CropPolygonPoint[i].y = activeShape.CropPolygonPoint[i].y * Props.CropViewScale;
+                        }
+                    break;
+            }
+        }
+ 
+ 
+        cropAreaSvg.attr("width", shapeLocation.Width + 24);
+        cropAreaSvg.attr("height", shapeLocation.Height + 24);
+        Props.CircleSizeRatio = activeShape.ScaleX < activeShape.ScaleY ? 1.0 / activeShape.ScaleX :  1.0 / activeShape.ScaleY;
+        var DX=shapeLocation.X - 10;
+        var DY=shapeLocation.Y - 10;
+        var DW=shapeLocation.Width + 20;
+        var DH=shapeLocation.Height + 20;
+
+        document.getElementById("CropAreaSvg").setAttribute( "viewBox" , DX + " " + DY  + " " +  DW  + " " +  DH );
+        //cropAreaSvg.setAttribute( "viewBox" , shapeLocation.X + " " + shapeLocation.Y  + " " +  shapeLocation.Width  + " " +  shapeLocation.Height );
+
+        Props.ImageHeight = parseFloat(bb.width); // crop image (red) max height and width
+        Props.ImageWidth = parseFloat(bb.height);
+
+        cropAreaSvg.mousemove(HandleCropMoveClosure());
+        cropAreaSvg.mouseleave(StopCropResizeClosure());
+        cropAreaSvg.mouseup(StopCropResizeClosure());
+        cropAreaSvg.mousedown(StartCropAreaMoveClosure());
+
+        cropAreaSvg.css("cursor", "hand");
+
+        AddSelectors();
+
+    };
+
+    //#region "Selectors"
+    function AddSelectors()
+    {
+        var g = $("#croppedImageCopy_ClipArea");
+        if (g !== null || g.length > 0)
+        {
+            g.detach();
+        }
+        g = SvgCreator.CreateSvgGroup("croppedImageCopy_ClipArea");
+
+        $("#" + Props.CroppedImageCopyId+"_scale").append(g);
+
+        switch ( Props.CropType )
+        {
+            case CropTypeEnum.Standard:
+                g.appendChild(SvgCreator.AddRect(Props.CropLeft, Props.CropTop, Props.CropWidth, Props.CropHeight, "black", "red", "4,4", ".25", "CropAreaBox"));
+                break;
+            case CropTypeEnum.Advanced:
+                g.appendChild(SvgCreator.AddPolygon(Props.CropPolygonPoint, "black", "red", "4,4", "1" ,".25", "CropAreaBoxAdvanced",null));
+                break;
+            case CropTypeEnum.Circle:
+        
+                g.appendChild(SvgCreator.AddEllipse( Props.EllipseCX , Props.EllipseCY , Props.EllipseRX , Props.EllipseRY , "black", "red", "4,4", ".25", "CropAreaEllipse"));
+                g.appendChild(SvgCreator.AddRect(Props.CropLeft, Props.CropTop, Props.CropWidth, Props.CropHeight, "black", "red", "4,4", ".25", "CropAreaBox"));
+
+                break;
+        } 
+            
+        if (MyBrowserProperties.IsMobile)
+        {
+            AddMobileSelectors(g);
+        }
+        else
+        {
+            AddComputerSelectors(g);
+        }
+    };
+
+    function AddMobileSelectors(g)
+    { 
+        var circleSize = 13 * Props.CircleSizeRatio;
+        
+
+        var strokeColor = "#AAA393";
+        var fillColor = "#6285C7";
+
+        if( Props.CropType == CropTypeEnum.Standard || Props.CropType == CropTypeEnum.Circle )
+        {
+            var cropAreaBox = $("#CropAreaBox");
+            cropAreaBox.css("border-width", 5);
+           
+            var left = Props.CropLeft;
+            var right = Props.CropWidth + Props.CropLeft;
+            var top = Props.CropTop;
+            var bottom = Props.CropHeight + Props.CropTop;
+            
+
+            g.appendChild(SvgCreator.AddCircle(left, top, circleSize, strokeColor, fillColor, Props.CroppedImageCopyId + "_nw_circle", "ResizeNW"));
+            g.appendChild(SvgCreator.AddCircle(right, top, circleSize, strokeColor, fillColor, Props.CroppedImageCopyId + "_ne_circle", "ResizeNE"));
+            g.appendChild(SvgCreator.AddCircle(left, bottom, circleSize, strokeColor, fillColor, Props.CroppedImageCopyId + "_sw_circle", "ResizeNE"));
+            g.appendChild(SvgCreator.AddCircle(right, bottom, circleSize, strokeColor, fillColor, Props.CroppedImageCopyId + "_se_circle", "ResizeNW"));
+
+            var a = fillColor;
+            fillColor = strokeColor;
+            strokeColor = a;
+            var middleX = (left + right) / 2;
+            var middleY = (top + bottom) / 2;
+            g.appendChild(SvgCreator.AddCircle(middleX, top, circleSize - 2, strokeColor, fillColor, Props.CroppedImageCopyId + "_n_circle", "ResizeV"));
+            g.appendChild(SvgCreator.AddCircle(middleX, bottom, circleSize - 2, strokeColor, fillColor, Props.CroppedImageCopyId + "_s_circle", "ResizeV"));
+            g.appendChild(SvgCreator.AddCircle(left, middleY, circleSize - 2, strokeColor, fillColor, Props.CroppedImageCopyId + "_w_circle", "ResizeH"));
+            g.appendChild(SvgCreator.AddCircle(right, middleY, circleSize - 2, strokeColor, fillColor, Props.CroppedImageCopyId + "_e_circle", "ResizeH"));
+
+            PrivateSetTouchyEdgeHandlers(Props.CroppedImageCopyId + "_ne_circle", HandleTouchyCropResizeClosure(ResizeEnum.NE));
+            PrivateSetTouchyEdgeHandlers(Props.CroppedImageCopyId + "_nw_circle", HandleTouchyCropResizeClosure(ResizeEnum.NW));
+            PrivateSetTouchyEdgeHandlers(Props.CroppedImageCopyId + "_se_circle", HandleTouchyCropResizeClosure(ResizeEnum.SE));
+            PrivateSetTouchyEdgeHandlers(Props.CroppedImageCopyId + "_sw_circle", HandleTouchyCropResizeClosure(ResizeEnum.SW));
+
+            PrivateSetTouchyEdgeHandlers(Props.CroppedImageCopyId + "_n_circle", HandleTouchyCropResizeClosure(ResizeEnum.N));
+            PrivateSetTouchyEdgeHandlers(Props.CroppedImageCopyId + "_s_circle", HandleTouchyCropResizeClosure(ResizeEnum.S));
+            PrivateSetTouchyEdgeHandlers(Props.CroppedImageCopyId + "_e_circle", HandleTouchyCropResizeClosure(ResizeEnum.E));
+            PrivateSetTouchyEdgeHandlers(Props.CroppedImageCopyId + "_w_circle", HandleTouchyCropResizeClosure(ResizeEnum.W));
+
+            PrivateSetTouchyEdgeHandlers("CropAreaBox" , HandleTouchyCropMoveClosure());
+        }
+        if (Props.CropType == CropTypeEnum.Advanced)
+        { 
+            var i;
+            var a = fillColor;
+            fillColor = strokeColor;
+            strokeColor = a;
+
+            var CropAreaBoxAdvanced = $("#CropAreaBoxAdvanced");
+            CropAreaBoxAdvanced.css("border-width", 5);
+
+            for( i = 0 ; i < Props.CropPolygonPoint.length ; i++ )
+            {
+                g.appendChild(SvgCreator.AddCircle(Props.CropPolygonPoint[i].x, Props.CropPolygonPoint[i].y , circleSize, strokeColor, fillColor, Props.CroppedImageCopyId + "_advan_circle" + i, "MoveObject"));
+                PrivateSetTouchyEdgeHandlers(Props.CroppedImageCopyId + "_advan_circle" + i, HandleTouchyCropResizeClosure( ResizeEnum.NSEW , i ));
+            } 
+            PrivateSetTouchyEdgeHandlers("CropAreaBoxAdvanced" , HandleTouchyCropMoveClosure());
+        }
+    };
+
+    function PrivateSetTouchyEdgeHandlers(id, touchyDragEvent)
+    {
+        $("#" + id).bind('touchy-drag', touchyDragEvent);
+        //$("#" + id).data('touchy-drag').settings.msHoldThresh = 10;
+    }
+
+    function AddComputerSelectors(g)
+    { 
+        var circleSize = 5 * Props.CircleSizeRatio;
+        var strokeColor = "#AAA393";
+        var fillColor = "#6285C7";
+
+        if( Props.CropType == CropTypeEnum.Standard || Props.CropType == CropTypeEnum.Circle )
+        { 
+            var left = Props.CropLeft;
+            var right = Props.CropWidth + Props.CropLeft;
+            var top = Props.CropTop;
+            var bottom = Props.CropHeight + Props.CropTop;
+            
+ 
+            g.appendChild(SvgCreator.AddCircle(left, top, circleSize, strokeColor, fillColor, Props.CroppedImageCopyId + "_nw_circle", "ResizeNW"));
+            g.appendChild(SvgCreator.AddCircle(right, top, circleSize, strokeColor, fillColor, Props.CroppedImageCopyId + "_ne_circle", "ResizeNE"));
+            g.appendChild(SvgCreator.AddCircle(left, bottom, circleSize, strokeColor, fillColor, Props.CroppedImageCopyId + "_sw_circle", "ResizeNE"));
+            g.appendChild(SvgCreator.AddCircle(right, bottom, circleSize, strokeColor, fillColor, Props.CroppedImageCopyId + "_se_circle", "ResizeNW"));
+
+            var a = fillColor;
+            fillColor = strokeColor;
+            strokeColor = a;
+            var middleX = (left + right) / 2;
+            var middleY = (top + bottom) / 2;
+            g.appendChild(SvgCreator.AddCircle(middleX, top, circleSize - 2, strokeColor, fillColor, Props.CroppedImageCopyId + "_n_circle", "ResizeV"));
+            g.appendChild(SvgCreator.AddCircle(middleX, bottom, circleSize - 2, strokeColor, fillColor, Props.CroppedImageCopyId + "_s_circle", "ResizeV"));
+            g.appendChild(SvgCreator.AddCircle(left, middleY, circleSize - 2, strokeColor, fillColor, Props.CroppedImageCopyId + "_w_circle", "ResizeH"));
+            g.appendChild(SvgCreator.AddCircle(right, middleY, circleSize - 2, strokeColor, fillColor, Props.CroppedImageCopyId + "_e_circle", "ResizeH"));
+
+            Private_SetEdgeHandlers(Props.CroppedImageCopyId + "_ne_circle", StartCropResizeClosure(ResizeEnum.NE));
+            Private_SetEdgeHandlers(Props.CroppedImageCopyId + "_nw_circle", StartCropResizeClosure(ResizeEnum.NW));
+            Private_SetEdgeHandlers(Props.CroppedImageCopyId + "_se_circle", StartCropResizeClosure(ResizeEnum.SE));
+            Private_SetEdgeHandlers(Props.CroppedImageCopyId + "_sw_circle", StartCropResizeClosure(ResizeEnum.SW));
+
+            Private_SetEdgeHandlers(Props.CroppedImageCopyId + "_n_circle", StartCropResizeClosure(ResizeEnum.N));
+            Private_SetEdgeHandlers(Props.CroppedImageCopyId + "_s_circle", StartCropResizeClosure(ResizeEnum.S));
+            Private_SetEdgeHandlers(Props.CroppedImageCopyId + "_e_circle", StartCropResizeClosure(ResizeEnum.E));
+            Private_SetEdgeHandlers(Props.CroppedImageCopyId + "_w_circle", StartCropResizeClosure(ResizeEnum.W));
+      
+        }
+
+        if (Props.CropType == CropTypeEnum.Advanced)
+        { 
+              
+            var i;
+            for( i = 0 ; i < Props.CropPolygonPoint.length ; i++ )
+            {
+                g.appendChild(SvgCreator.AddCircle(Props.CropPolygonPoint[i].x, Props.CropPolygonPoint[i].y , circleSize, strokeColor, fillColor, Props.CroppedImageCopyId + "_advan_circle" + i, "MoveObject"));
+                Private_SetEdgeHandlers(Props.CroppedImageCopyId + "_advan_circle" + i, StartCropResizeClosure( ResizeEnum.NSEW , i ));
+            } 
+        }
+        
+    };
+
+    function Private_SetEdgeHandlers(id, mouseDownEvent)
+    {
+        $("#" + id).mousedown(mouseDownEvent);
+    };
+
+    function UpdateSelectors()
+    {
+        if( Props.CropType == CropTypeEnum.Standard || Props.CropType == CropTypeEnum.Circle )
+        {
+            var cropAreaBox = $("#CropAreaBox");
+            var nw_circle = $("#" + Props.CroppedImageCopyId + "_nw_circle");
+            var ne_circle = $("#" + Props.CroppedImageCopyId + "_ne_circle");
+            var sw_circle = $("#" + Props.CroppedImageCopyId + "_sw_circle");
+            var se_circle = $("#" + Props.CroppedImageCopyId + "_se_circle");
+
+            var n_circle = $("#" + Props.CroppedImageCopyId + "_n_circle ");
+            var s_circle = $("#" + Props.CroppedImageCopyId + "_s_circle ");
+            var w_circle = $("#" + Props.CroppedImageCopyId + "_w_circle ");
+            var e_circle = $("#" + Props.CroppedImageCopyId + "_e_circle ");
+
+            var left = Props.CropLeft;
+            var right = Props.CropWidth + Props.CropLeft;
+            var top = Props.CropTop;
+            var bottom = Props.CropHeight + Props.CropTop;
+            var middleX = (left + right) / 2;
+            var middleY = (top + bottom) / 2;
+ 
+
+            SvgCreator.UpdateRectangle(cropAreaBox, Props.CropLeft, Props.CropTop, Props.CropWidth, Props.CropHeight);
+
+
+            SvgCreator.UpdateCircle(nw_circle, left, top);
+            SvgCreator.UpdateCircle(ne_circle, right, top);
+            SvgCreator.UpdateCircle(sw_circle, left, bottom);
+            SvgCreator.UpdateCircle(se_circle, right, bottom);
+
+            SvgCreator.UpdateCircle(n_circle, middleX, top);
+            SvgCreator.UpdateCircle(s_circle, middleX, bottom);
+            SvgCreator.UpdateCircle(w_circle, left, middleY);
+            SvgCreator.UpdateCircle(e_circle, right, middleY);
+
+            
+
+            if( Props.CropType == CropTypeEnum.Circle )
+            {
+                var CropAreaEllipse = $("#CropAreaEllipse");           
+                Props.EllipseRX = Props.CropWidth  / 2;
+                Props.EllipseRY = Props.CropHeight / 2;
+                Props.EllipseCX = Props.CropLeft + Props.EllipseRX ;
+                Props.EllipseCY = Props.CropTop  + Props.EllipseRY ; 
+                SvgCreator.UpdateEllipse( CropAreaEllipse , Props.EllipseCX , Props.EllipseCY , Props.EllipseRX , Props.EllipseRY   );
+            }
+        } 
+
+        if( Props.CropType == CropTypeEnum.Advanced )
+        {
+            var CropAreaBoxAdvanced = $("#CropAreaBoxAdvanced");
+            SvgCreator.UpdatePolygon( CropAreaBoxAdvanced,  Props.CropPolygonPoint );
+
+            
+            for( i = 0 ; i < Props.CropPolygonPoint.length ; i++ )
+            {
+                var CropSelectedPoint = $("#" + Props.CroppedImageCopyId + "_advan_circle" + i );
+                SvgCreator.UpdateCircle( CropSelectedPoint , Props.CropPolygonPoint[ i ].x , Props.CropPolygonPoint[ i ].y );
+                 
+            }
+        }
+    }
+
+    //#endregion
+    function UpdateCropBox(deltaX, deltaY)
+    {
+        if (Props.CropType == CropTypeEnum.Standard || Props.CropType == CropTypeEnum.Circle)
+        {
+            
+            // handle X changes first
+            switch (Props.CropResizeDirection)
+            {
+                case ResizeEnum.W:
+                case ResizeEnum.NW:
+                case ResizeEnum.SW:
+                    {
+                        Props.CropLeft += deltaX;
+                        Props.CropWidth -= deltaX;
+                        break;
+                    }
+                case ResizeEnum.E:
+                case ResizeEnum.NE:
+                case ResizeEnum.SE:
+                    {
+                        //MyCroppedImage.CropLeft += deltaX;
+                        Props.CropWidth += deltaX;
+                        break;
+                    }
+            }
+
+            // handle Y changes first
+            switch (Props.CropResizeDirection)
+            {
+                case ResizeEnum.N:
+                case ResizeEnum.NW:
+                case ResizeEnum.NE:
+                    {
+                        Props.CropTop += deltaY;
+                        Props.CropHeight -= deltaY;
+                        break;
+                    }
+                case ResizeEnum.S:
+                case ResizeEnum.SW:
+                case ResizeEnum.SE:
+                    {
+                        //MyCroppedImage.CropLeft += deltaX;
+                        Props.CropHeight += deltaY;
+                        break;
+                    }
+            }
+
+            if(Props.CropType == CropTypeEnum.Circle )
+            {
+                Props.EllipseRX = Props.CropWidth  / 2;
+                Props.EllipseRY = Props.CropHeight / 2;
+                Props.EllipseCX = Props.CropLeft + Props.EllipseRX ;
+                Props.EllipseCY = Props.CropTop  + Props.EllipseRY ;
+            }
+
+        }
+
+        if( Props.CropType == CropTypeEnum.Advanced )
+        {
+            if( Props.CropPolygonPoint.length >= 4 )
+            {
+                var b = ( Props.CropPolygonPointSelectedID + 2 ) % 4;
+                a = Props.CropPolygonPointSelectedID;
+
+               // DebugLine(Math.abs( Props.CropPolygonPoint[a].x - Props.CropPolygonPoint[b].x) + Math.abs( Props.CropPolygonPoint[a].y - Props.CropPolygonPoint[b].y));
+
+                if( Math.abs( Props.CropPolygonPoint[a].x - Props.CropPolygonPoint[b].x + deltaX) + Math.abs( Props.CropPolygonPoint[a].y - Props.CropPolygonPoint[b].y+deltaY) < 30 ) 
+                    return;
+             
+            }
+
+            Props.CropPolygonPoint[ Props.CropPolygonPointSelectedID ].x += deltaX;
+            Props.CropPolygonPoint[ Props.CropPolygonPointSelectedID ].y += deltaY;
+        }
+
+        UpdateSelectors();
+    };
+
+    function MoveCropBox(deltaX, deltaY)
+    {
+        var i;
+        switch(Props.CropType)
+        {
+            case CropTypeEnum.Standard:
+            case CropTypeEnum.Circle:
+                Props.CropTop += deltaY;
+                Props.CropLeft += deltaX;
+
+                //Props.CropTop = Props.CropTop < 0 ? 0 : Props.CropTop;
+                //Props.CropTop = Props.CropTop > (Props.ImageHeight - Props.CropHeight - 20) ? Props.ImageHeight - Props.CropHeight - 20 : Props.CropTop;
+
+                //Props.CropLeft = Props.CropLeft < 0 ? 0 : Props.CropLeft;
+                //Props.CropLeft = Props.CropLeft > (Props.ImageWidth - Props.CropWidth-20 ) ? (Props.ImageWidth - Props.CropWidth-20 ) : Props.CropLeft;
+                if( Props.CroType == 2 )
+                {
+                    Props.EllipseRX = Props.CropWidth  / 2;
+                    Props.EllipseRY = Props.CropHeight / 2;
+                    Props.EllipseCX = Props.CropLeft + Props.EllipseRX ;
+                    Props.EllipseCY = Props.CropTop  + Props.EllipseRY ;
+                }
+            
+                break;
+            case CropTypeEnum.Advanced:   
+                // Get min , max of each 
+                {
+                    var minX = 9999 ;
+                    var minY = 9999;
+                    var maxX = 0;
+                    var maxY = 0;
+
+                    for( i = 0 ; i < Props.CropPolygonPoint.length ; i++ )
+                    {
+                            minX = Math.min( minX , Props.CropPolygonPoint[i].x );
+                            minY = Math.min( minY , Props.CropPolygonPoint[i].y );
+                            maxX = Math.max( maxX , Props.CropPolygonPoint[i].x );
+                            maxY = Math.max( maxY , Props.CropPolygonPoint[i].y );
+                    }
+ 
+                   
+                    
+                    if( deltaX + minX < 0 || deltaX + maxX > Props.ImageWidth - 20 || deltaY + minY < 0 || deltaY + maxY > Props.ImageHeight - 20 )
+                        return;
+
+                    for( i = 0 ; i < Props.CropPolygonPoint.length ; i++ )
+                    {
+                            Props.CropPolygonPoint[i].x += deltaX;
+                            Props.CropPolygonPoint[i].y += deltaY;
+                    }
+                }
+                break;         
+        }
+
+        
+        UpdateSelectors();
+    };
+
+    function HandleTouchyCropResizeClosure(cropResizeDirection , CropPolygonPointSelectedID  )
+    {
+        return function (event, phase, $target, data)
+        {
+            if (phase != "move")
+            {
+                return;
+            }
+            Props.CropResizeDirection = cropResizeDirection;
+            Props.CropPolygonPointSelectedID = CropPolygonPointSelectedID;
+
+            if (Props.CropResizeDirection == null || Props.CropResizeDirection == undefined)
+                return;
+
+            var deltaX = data.movePoint.x - data.lastMovePoint.x;
+            var deltaY = data.movePoint.y - data.lastMovePoint.y;
+
+            UpdateCropBox(deltaX, deltaY);
+        }
+
+    };
+
+    function HandleTouchyCropMoveClosure(cropResizeDirection )
+    {
+        return function (event, phase, $target, data)
+        {
+            if (phase != "move")
+            {
+                return;
+            }
+
+            var deltaX = data.movePoint.x - data.lastMovePoint.x;
+            var deltaY = data.movePoint.y - data.lastMovePoint.y;
+            
+            MoveCropBox(deltaX, deltaY);
+        }
+    };
+
+    function StartCropResizeClosure(cropResizeDirection , CropPolygonPointSelectedID )
+    {
+        return function (e)
+        {
+            var ee = { x: e.pageX , y:e.pageY } ;
+            var P = ConvertCoordinateToOriginal( ee );
+            Props.CropAction = "Resize";
+            Props.ResizePageX = P.x;
+            Props.ResizePageY = P.y;
+
+            Props.CropResizeDirection = cropResizeDirection;
+            Props.CropPolygonPointSelectedID = CropPolygonPointSelectedID;
+
+            e.stopPropagation();
+        };
+    };
+
+    function StartCropAreaMoveClosure()
+    {
+        return function (e)
+        {
+            Props.CropAction = "Move";
+            
+            var ee = { x: e.pageX , y:e.pageY } ;
+            var P = ConvertCoordinateToOriginal( ee ); 
+            Props.ResizePageX = P.x;
+            Props.ResizePageY = P.y;
+
+            e.stopPropagation();
+        };
+    }
+
+    function HandleCropMoveClosure()
+    {
+        return function (e)
+        {
+            if (Props.CropAction == "")
+                return;
+            var ee = { x: e.pageX , y: e.pageY } ; 
+            var P = ConvertCoordinateToOriginal( ee ); 
+            
+            deltaX = P.x - Props.ResizePageX;
+            deltaY = P.y - Props.ResizePageY;
+
+            Props.ResizePageX = P.x;
+            Props.ResizePageY = P.y;
+
+            if (Props.CropAction == "Resize")
+                UpdateCropBox(deltaX, deltaY);
+
+            else if (Props.CropAction == "Move")
+                MoveCropBox(deltaX, deltaY);
+        };
+    };
+
+    
+
+    function StopCropResizeClosure()
+    {
+        return function ()
+        {
+            Props.CropAction = "";
+        };
+    };
+
+    function GetImageBeingCropped()
+    {
+        var active = MyShapesState.Public_GetFirstSelectedShapeState();;
+
+        if (active === null)
+        {
+            active = MyShapesState.Public_GetShapeStateById(Props.OriginalShapeId);
+        }
+
+        return active;
+    };
+
+    CropHelperObject.ChangeCropMode = function( activeShape , CropType )
+    {
+        Props.CropType = CropType; 
+        PrepareShapePostModal( null, activeShape);
+    }
+
+    CropHelperObject.ShowCropDialog = function( activeShape , CropType )
+    {
+        MyPointers.Dialog_CropImage.one('shown.bs.modal', PrepareShapePostModalClosure(activeShape));
+        Props.CropType = CropType;
+        
+        //prevent showing the previous crop
+        var cropAreaSvg = $("#CropAreaSvg");
+        cropAreaSvg.children().remove();
+
+        MyPointers.Dialog_CropImage.modal();
+    };
+
+    CropHelperObject.RemoveCrop = function ()
+    {
+        var active = GetImageBeingCropped();
+        active.UseClipping = false;
+        active.UpdateDrawing();
+        MyPointers.Dialog_CropImage.modal('hide');
+
+        UndoManager.register(undefined, UndoCrop, [active.Id, true, active.ClipX, active.ClipY, active.ClipWidth, active.ClipHeight , JSON.parse(JSON.stringify( active.CropPolygonPoint)) , active.CropType  ], '',
+                             undefined, UndoCrop, [active.Id, active.UseClipping, active.ClipX, active.ClipY, active.ClipWidth, active.ClipHeight , JSON.parse(JSON.stringify( active.CropPolygonPoint)) , active.CropType], '');
+    };
+
+    CropHelperObject.CancelCrop = function ()
+    {
+        MyPointers.Dialog_CropImage.modal('hide');
+        var active = GetImageBeingCropped();
+        active.UpdateDrawing();
+    };
+
+    function ConvertCoordinateToOriginal( point )
+    {
+        // orignal order :  scale (sx , sy) , rotate with (cx,cy , alpha ) , transfer tx , ty
+
+        // transfer original
+        var P = { x: point.x - Props.move_delta.x , y: point.y - Props.move_delta.y }; 
+        // go center of circle 
+
+        P = { x: P.x - Props.rotate_center.x , y: P.y - Props.rotate_center.y }; 
+
+        
+
+        // rotate -alpha
+        P = {  x:  P.x * Math.cos( -Props.rotate_alpha * Math.PI / 180.0 ) - P.y * Math.sin( -Props.rotate_alpha * Math.PI / 180.0 ), // rotate original
+               y:  P.x * Math.sin( -Props.rotate_alpha * Math.PI / 180.0 ) + P.y * Math.cos( -Props.rotate_alpha * Math.PI / 180.0 ) }; 
+
+        
+        // go origin
+        P = { x: P.x + Props.rotate_center.x , y: P.y + Props.rotate_center.y }; 
+
+        // // scale back
+        P = { x: P.x / Props.scale.x , y: P.y / Props.scale.y };
+        
+
+        return P;
+    }
+
+    CropHelperObject.UpdateCrop = function ()
+    {
+        if (MyBrowserProperties.IsMobile)
+        {
+            $.touchyOptions.useDelegation = true;
+        }
+
+        var active = GetImageBeingCropped();
+
+        var undoUseClipping = active.UseClipping;
+        var undoCropType = active.CropType;
+        var undoCropPolygonPoint = JSON.parse(JSON.stringify( active.CropPolygonPoint)); //wrong method
+        var undoClipX = active.ClipX;
+        var undoClipY = active.ClipY;
+        var undoClipWidth = active.ClipWidth;
+        var undoClipHeight = active.ClipHeight;
+        
+
+        active.UseClipping = true;
+        active.CropType = Props.CropType;
+        
+        var i;
+
+        var bb = active.GetBBox(false);  // this was assuming the value was true, but it is actually false...
+
+        switch( Props.CropType )
+        {
+            case CropTypeEnum.Standard:
+            case CropTypeEnum.Circle:
+                active.ClipX = Props.CropLeft / Props.CropViewScale;
+                active.ClipY = Props.CropTop / Props.CropViewScale;
+                active.ClipWidth = Props.CropWidth / Props.CropViewScale;
+                active.ClipHeight = Props.CropHeight / Props.CropViewScale;
+                break;
+
+            case CropTypeEnum.Advanced: 
+             
+                {
+                    active.ClipX = bb.width;
+                    active.ClipY = bb.height;
+                    active.ClipWidth = 0;
+                    active.ClipHeight = 0;
+ 
+
+                    for( i = 0 ; i < Props.CropPolygonPoint.length ; i++ )
+                    {
+                        active.CropPolygonPoint[i].x = Props.CropPolygonPoint[i].x / Props.CropViewScale;
+                        active.CropPolygonPoint[i].y = Props.CropPolygonPoint[i].y / Props.CropViewScale;
+                        active.ClipX = Math.min( active.ClipX , active.CropPolygonPoint[i].x );
+                        active.ClipY = Math.min( active.ClipY , active.CropPolygonPoint[i].y );
+                        active.ClipWidth  = Math.max( active.ClipWidth , active.CropPolygonPoint[i].x );
+                        active.ClipHeight = Math.max( active.ClipHeight , active.CropPolygonPoint[i].y );
+                    } 
+                    active.ClipWidth  -= active.ClipX ;
+                    active.ClipHeight -= active.ClipY ;
+                
+                }
+                break;
+        } 
+
+        active.CropPolygonPointJson = JSON.stringify( active.CropPolygonPoint );
+        
+        
+
+        if (active.ClipX < 0)
+        {
+            active.ClipWidth += active.ClipX;
+            active.ClipX = 0;
+        }
+
+        if (active.ClipY < 0)
+        {
+            active.ClipHeight += active.ClipY;
+            active.ClipY = 0;
+        }
+
+        if (active.ClipWidth < 10)
+            active.ClipWidth = 10;
+
+        if (active.ClipHeight < 10)
+            active.ClipHeight = 10;
+
+        // if (active.ClipHeight > (bb.height / active.ScaleY))
+        //     active.ClipHeight = bb.height / active.ScaleY;
+
+        // if (active.ClipWidth > (bb.width / active.ScaleX))
+        //     active.ClipWidth = bb.width / active.ScaleX; 
+    
+
+        UpdateActiveDrawing();
+        UpdateActiveDrawing();// need to call it twice for all the magic to happen...
+        MyPointers.Dialog_CropImage.modal('hide');
+
+        UndoManager.register(undefined, UndoCrop, [active.Id, undoUseClipping, undoClipX, undoClipY, undoClipWidth, undoClipHeight, undoCropPolygonPoint,undoCropType], '',
+        undefined, UndoCrop, [active.Id, active.UseClipping, active.ClipX, active.ClipY, active.ClipWidth, active.ClipHeight , JSON.parse(JSON.stringify( active.CropPolygonPoint)),active.CropType], '');
+    };
+
+    return CropHelperObject;
+}();

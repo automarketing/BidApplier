@@ -1,0 +1,289 @@
+﻿// Singleton to manage adding raw SVG to tabs or the storyboard
+var SVGBUF = new Array();
+
+var AddSvg = function ()
+{
+    //#region "Privates"
+
+    var CloneIndex = 0;
+    var thumb_width = 0;
+    var thumb_height = 0;
+    
+    var _PerformSvgTranslationsForTabs = function (text, containterId)
+    {
+        var cutOff = text.indexOf('?>');
+
+        var svg_xml = text.substring(cutOff + 2);
+
+        var g = $('#' + containterId);
+        console.log( "_PerformSvgTranslationsForTabs" , containterId );
+        var parentSvg = g.parent();
+
+        try
+        {
+            // This is where Error: Problem parsing d='' - search for dog tags to get error
+            g.append(svg_xml);
+
+        }
+        catch (err)
+        {
+        }
+        
+        AddSvgObject.CurrentShapeIndex += 1;
+
+        var width = parentSvg.attr('width');
+        var height = parentSvg.attr('height');
+
+        var id = 'clipart_' + AddSvgObject.CurrentShapeIndex;
+
+        g.attr('id', id);
+        parentSvg.attr('class', 'ClipartLibrary');
+
+        MyShapeMetaData.LookForMetaData(id);
+
+        var clipart = GetGlobalById(id);
+        var clipartParent = clipart.parentElement;
+
+
+        var jq = $('#' + id);
+
+        if (jq.children().first().attr("width") == null || jq.children().first().attr("height") == null)
+        {
+            jq.parent().remove();//this item is missing height/width - causes problems when you move cells and with slide shows! https://storyboardthat.atlassian.net/browse/WEB-190 
+            return false;
+        }
+        var bb = null;
+
+        try
+        {
+            bb = clipart.getBBox();
+        }
+        catch (ex)
+        {
+
+            LogErrorMessage("indexBS._PerformSvgTranslationsForTabs", ex);
+        }
+
+        if (bb === null || bb.x < -50 || bb.y < -50)
+        {
+            jq.parent().remove();//this item is FUBAR from a bounding box perspective, better to abandon it!
+            return false;
+        }
+
+        var boxWidth = bb.width;
+        var boxHeight = bb.height;
+        var minX = (width - 4) / boxWidth;
+        var minY = (height - 4) / boxHeight;
+
+        var scale = Math.min(minX, minY);
+        //var scale = minY;
+
+        clipart.setAttribute('transform', 'translate(0,0) scale(' + scale + ')');
+
+        var centerX = (width - ((boxWidth) * scale)) / 2;
+        centerX -= (bb.x * scale);      //does the "natural offset"
+
+        var centerY = (height - ((boxHeight) * scale)) / 2;
+        centerY -= (bb.y * scale);
+
+        clipart.setAttribute('transform', 'translate(' + (centerX) + ',' + centerY + ') scale(' + scale + ')');
+
+        var clientRect = clipart.getBoundingClientRect();
+        if (clientRect.width > 275 || clientRect.height > 275)
+        { // SEBC 2013-12-23 - Watch out, when changing the preview size, this main remove some items, because the box size is actually not respected: this should really be saying if (width > MyBrowserProperties.ClipartDisplayWidth || height > MyBrowserProperties.ClipartDisplayHeight), but then, almost everythign gets removed - somethign is fishy...
+
+            jq.parent().remove();  //this item is FUBAR from a bounding box perspective, better to abandon it!
+            return false;
+        }
+        var divParentId = $('#' + id).parent().parent().attr('id');
+
+        StoryboardContainer.UpdateGradientIds(jq);
+        StoryboardContainer.RemoveFilters();
+
+        //if ($('#' + divParentId).index() >= MyBrowserProperties.ShapesPerPanel)
+        //{
+        //    $('#' + divParentId).hide();
+        //}
+
+        return true;
+    };
+
+    var _AddShapeToStoryboardHelper = function (shape, id, x, y)
+    {
+        try
+        {
+            var newShape = MyPointers.GetSvgTop().before(shape);  // add the shape
+            newShape = MyPointers.GetSvgTop().prev(); // get a "pointer" to it
+
+            newShape.attr("id", id); // set it's id
+            newShape.attr("class", "activeShape"); // set it's id
+
+            var item = $("#" + id);
+
+            item.off("mousedown").on("mousedown", ShapeSelected);
+            item.off("mouseup").on("mouseup", HandleMouseExit);
+
+            SetInitialShapeIds(item, id);
+
+            var shapeState = new SvgState(id);
+            var clipart = GetGlobalById(id);
+            var bb = clipart.getBBox(); 
+
+            console.log( 'created clipart' , clipart );
+
+            SetInitialShapeOffset(item, shapeState);
+
+            console.log(item, shapeState, bb);
+            
+            var scale = SetInitalShapeScale(item, shapeState, bb);
+            SetInitialShapeCords(item, bb, x, y, scale, shapeState);
+
+            // Grab color filter effect
+            var sourceShape = $("#" + id + "_natural svg");
+            var filterColorMode = (sourceShape.css('filter') || EMPTY_STRING).replace('none', EMPTY_STRING).replace(/"/g, EMPTY_STRING).replace(/http[^#]*/, EMPTY_STRING).replace('[\s]+', EMPTY_STRING).replace('url(', EMPTY_STRING).replace(')', EMPTY_STRING).replace('#', EMPTY_STRING);
+            filterColorMode = (filterColorMode === EMPTY_STRING) ? EMPTY_STRING : 'url(#' + filterColorMode + ')';
+
+            // Assign as needed to new shape
+            $('#' + $(newShape).attr('id') + SvgPartsEnum.Natural).children('svg').css('filter', filterColorMode);
+
+            // Record in shape state
+            shapeState.FilterColorMode = filterColorMode;
+
+            // And make sure the filter is removed from the dragged item
+            sourceShape.css('filter', EMPTY_STRING);
+
+            MyShapesState.Public_SetShapeState(id, shapeState);
+
+            MyShapesState.Public_UpdateSingleShapeAndAction(newShape, ShapeActionEnum.Nothing);
+
+            shapeState.Public_ResetColors();
+
+            
+            if (NewShapeIsBackdrop)
+            {
+                StretchToFillShape(shapeState, shapeState.Property_VisibleX(), shapeState.Property_VisibleY());
+                NewShapeIsBackdrop = false;
+            } else UpdateActiveDrawing();
+
+            if (shapeState.ImageAttribution != null)
+                StoryboardContainer.UpdateImageAttributions();
+        }
+        catch (e)
+        {
+            LogErrorMessage("SvgManip.AddShape", e);
+        }
+    };
+
+    //#endregion 
+
+    var AddSvgObject = new Object();
+
+    AddSvgObject.CurrentShapeIndex = 1;
+
+    AddSvgObject.AddSvgToTabs = function (node, width, height, content, isSceneItem, onitemadded)
+    {
+        this.CurrentShapeIndex++;
+        
+        var parentId = 'clipartPanel' + this.CurrentShapeIndex;
+        var svgGroupId = 'svgGroup' + this.CurrentShapeIndex;
+
+        var newnodeHTML = '<div id="' + parentId + '" class="ClipartItemPanel' + (isSceneItem ? ' SceneItem' : '') + '"></div>';
+        if (node.find('div.search-more').length > 0)
+        {
+            node.find('div.search-more').after(newnodeHTML);
+        } else
+        {
+            node.append(newnodeHTML);
+        }
+
+        var svg = SvgCreator.CreateBlankSvg(width, height);
+        var g = SvgCreator.CreateSvgGroup(svgGroupId);
+
+        svg.appendChild(g);
+
+        MyPointers.StagingGround.append(svg);
+
+        if (_PerformSvgTranslationsForTabs(content, svgGroupId) == false)
+        {
+            $('#' + parentId).remove();
+            return;
+        }
+        // Making canvas object
+
+        var canvas_obj = document.createElement("canvas");
+        canvas_obj.id = 'canvas_' + this.CurrentShapeIndex;
+        canvg(canvas_obj, $('.ClipartLibrary')[0].outerHTML);
+        canvas_obj.draggable=true;
+        $('#' + parentId).append(canvas_obj); 
+        
+        canvas_obj.addEventListener("dragstart", function(ev) {
+            ev.dataTransfer.setData("text", ev.target.id);
+            ev.dataTransfer.setData("isSceneItem", isSceneItem);
+            console.log( ev );
+        });
+ 
+        SVGBUF[ canvas_obj.id ] = { xml : $('.ClipartLibrary').children().eq(0).detach() , isSceneItem : isSceneItem };
+
+        $('.ClipartLibrary').remove();
+        
+        // Apply filter to new item
+        if (typeof (onitemadded) === FUNCTION_KEYWORD)
+        {
+            onitemadded($('#' + parentId));
+        }
+
+        TabRoller.RefreshRollers_PostAdd();
+    };
+
+    AddSvgObject.AddSvgToStoryboard = function (shape, x, y, addUndo)
+    {
+        try
+        {
+            this.CurrentShapeIndex++;
+
+            var newShapeId = SvgPartsEnum.ShapeId + this.CurrentShapeIndex;
+            var newShapeOffsetId = "sbt_offset" + this.CurrentShapeIndex;    // this value gets overriden next method - abs 6/26/14
+
+            var outerSvg = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            outerSvg.setAttribute("id", newShapeId);
+
+            var svgGroupOffset = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            svgGroupOffset.setAttribute("id", newShapeOffsetId);
+
+            outerSvg.appendChild(svgGroupOffset);
+
+            // return outerSvg;
+
+            MyPointers.GetSvgTop().before(outerSvg);
+
+
+            var jq = $("#" + newShapeOffsetId);
+            jq.append(shape);
+
+            svgGroupOffset.firstChild.setAttribute("transform", "");
+
+            jq = $("#" + newShapeId);
+            jq.detach();
+
+            _AddShapeToStoryboardHelper(outerSvg, newShapeId, x, y);
+
+
+            //StoryboardContainer.UpdateGradientIds(outerSvg);
+
+            if (addUndo)
+                UndoManager.register(undefined, UndoShapeAdd, [{ Id: newShapeId }], undefined, '', UndoDeleteShape, [{ Detached: jq, NextShapeId: "SvgTop", Id: newShapeId, ShapeState: MyShapesState.Public_GetShapeStateById(newShapeId) }]);
+
+
+            GetStoryboardSize();
+
+            return jq;
+        }
+        catch (e)
+        {
+            LogErrorMessage("SvgManip.PrepAndAddShape", e);
+        }
+    };
+
+
+    return AddSvgObject;
+}();

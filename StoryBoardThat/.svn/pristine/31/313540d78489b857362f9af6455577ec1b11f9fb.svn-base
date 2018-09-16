@@ -1,0 +1,213 @@
+﻿/*http://www.colorzilla.com/gradient-editor/#e2e2e2+0,fefefe+45,dbdbdb+99;Custom*/
+.title-box
+{
+    background: rgb(226,226,226); /* Old browsers */
+    background: -moz-linear-gradient(left, rgba(226,226,226,1) 0%, rgba(254,254,254,1) 45%, rgba(219,219,219,1) 99%); /* FF3.6+ */
+    background: -webkit-gradient(linear, left top, right top, color-stop(0%,rgba(226,226,226,1)), color-stop(45%,rgba(254,254,254,1)), color-stop(99%,rgba(219,219,219,1))); /* Chrome,Safari4+ */
+    background: -webkit-linear-gradient(left, rgba(226,226,226,1) 0%,rgba(254,254,254,1) 45%,rgba(219,219,219,1) 99%); /* Chrome10+,Safari5.1+ */
+    background: -o-linear-gradient(left, rgba(226,226,226,1) 0%,rgba(254,254,254,1) 45%,rgba(219,219,219,1) 99%); /* Opera 11.10+ */
+    background: -ms-linear-gradient(left, rgba(226,226,226,1) 0%,rgba(254,254,254,1) 45%,rgba(219,219,219,1) 99%); /* IE10+ */
+    background: linear-gradient(to right, rgba(226,226,226,1) 0%,rgba(254,254,254,1) 45%,rgba(219,219,219,1) 99%); /* W3C */
+    filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#e2e2e2', endColorstr='#dbdbdb',GradientType=1 ); /* IE6-9 */
+}
+
+    .title-box h1
+    {
+        margin-top: 25px;
+        color: #1E5A9F;
+        font-weight: bold;
+    }
+
+    .title-box h2
+    {
+        margin: 0;
+        color: #1E5A9F;
+        font-style: italic;
+        font-weight: bold;
+    }
+
+    .title-box h3
+    {
+        color: #1E5A9F;
+        font-style: italic;
+    }
+
+.Article-List-Box
+{
+    background-color: #1E5A9F;
+    color: white;
+}
+
+    .Article-List-Box ul
+    {
+        list-style-type: none;
+        padding: 0;
+    }
+
+        .Article-List-Box ul li a, .Article-List-Box h3 a
+        {
+            color: white;
+        }
+
+.Article-Location-Box
+{
+    background-color: #1E5A9F;
+    color: white;
+    padding: 5px;
+    text-align: center;
+}
+
+    .Article-Location-Box a
+    {
+        color: white;
+        text-decoration: underline;
+    }
+
+
+.article-toc-wide
+{
+}
+
+.Article-Content h2, .Article-Content h3
+{
+    font-weight: bold;
+    text-align: center;
+    margin: 25px 0;
+}
+
+.Article-Content h4
+{
+    font-weight: bold;
+    text-align: left;
+}
+
+/*use a very specific query to get past bootstrap ABS 2/17/16 */
+.Article-Content .table tr > th
+{
+    font-weight: bold;
+    text-align: center;
+    vertical-align: middle;
+    font-size: 18px;
+    padding-left: 15px;
+    padding-right: 15px;
+    /*background-color: orange;*/
+}
+
+h2.snippet-title, h3.snippet-title {
+    font-weight: bold;
+    text-align: left;
+    padding-top: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-bottom: 5px;
+}
+
+
+.article-toc-wide h2
+{
+    text-transform: uppercase;
+}
+
+.table > thead > tr > th.info,
+.table > tbody > tr > th.info,
+.table > tfoot > tr > th.info,
+.table > thead > tr.info > th,
+.table > tbody > tr.info > th,
+.table > tfoot > tr.info > th
+{
+    background-color: #729DC8;
+    color: #243B53;
+    font-size: 24px;
+}
+
+ .vertical-centered tbody > tr>  td,
+ .vertical-centered tbody > tr>  th
+{
+    vertical-align:middle;
+    
+}
+
+
+
+
+
+.article-toc-wide ul
+{
+    text-align: center;
+    display: inline-block;
+}
+
+    .article-toc-wide ul li
+    {
+        list-style: none;
+        display: inline;
+        font-size: 17px;
+        text-align: center;
+    }
+
+        .article-toc-wide ul li:after
+        {
+            padding-left: 10px;
+            padding-right: 10px;
+            content: " \00b7";
+        }
+
+        .article-toc-wide ul li:last-child:after
+        {
+            content: none;
+        }
+
+.article-section-header
+{
+    font-weight: bold;
+    text-align: center;
+    margin: 25px 0;
+}
+
+.Teacher-Guide-Assignment-Meta-Data
+{
+    float: none;
+    max-width: 100%;
+    background-color: #F0F8FF;
+    padding: 5px;
+    border: 1px solid black;
+    font-size: .875em;
+    line-height: 1.5;
+    margin-bottom: 15px;
+    /*display:none;*/
+}
+
+.Block-Quote-Citation
+{
+    background-color: inherit;
+    color: #333;
+    padding: 0;
+    margin: 0;
+    text-align: match-parent;
+    display: block;
+    margin;
+}
+
+blockquote
+{
+    padding: 25px;
+}
+
+/*#region "Magic Widgets"*/
+.Instructional-Callout
+{
+    color: #F5A133;
+    font-size: 19px;
+    font-weight: bold;
+    text-align: center;
+    margin: 15px 0 0px 0;
+}
+
+.Instructional-Callout-Learn-More
+{
+    font-size: 14px;
+    font-style: italic;
+    text-align: center;
+    margin: 0 0 25px 0;
+}
+/*#endregion*/

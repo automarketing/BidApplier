@@ -1,0 +1,585 @@
+﻿/// <reference path="../svgManip.js" />
+
+function PosableState(id, globalImageId, position)
+{
+    this.Private_ShapeId = id;
+    this.Private_GlobalImageId = globalImageId;
+    this.Position = position;
+    this.Private_PreviousPoseList;
+
+    //this.Private_ColorableState = colorableState;
+
+    this.Private_PoseGroups = new Array();
+
+    this.Private_HandleLoad();
+}
+
+PosableState.prototype.Private_HandleLoad = function ()
+{
+    this.Private_ParseMetaData();
+    this.Private_LoadDefaults();
+};
+
+PosableState.prototype.Private_ParseMetaData = function ()
+{
+    try
+    {
+
+
+        var metaData = $("#" + this.Private_ShapeId).find("sbtdata");
+        var posable = metaData.find(SbtDataEnum.MetaData_Posable);
+        var poses = posable.find(SbtDataEnum.MetaData_Poses);
+
+        for (var i = 0; i < poses.length; i++)
+        {
+            var posableType = GetSafeAttributeNS(poses[i], SbtDataEnum.Attribute_Pose_Type);
+            var pose = null;
+            if (LowerCaseCompare(posableType, SbtDataEnum.PoseType_Tilt))
+            {
+                pose = new TiltablePose(this.Private_ShapeId, poses[i], this.Position);
+            }
+            else if (LowerCaseCompare(posableType, SbtDataEnum.PoseType_Swap))
+            {
+                pose = new CharacterLibrarySwappablePose(this.Private_ShapeId, this.Private_GlobalImageId, poses[i], this.Position);
+            }
+            else if (LowerCaseCompare(posableType, SbtDataEnum.PoseType_LibrarySwap))
+            {
+                pose = new GlobalLibrarySwappablePose(this.Private_ShapeId, poses[i], this.Position);
+            }
+
+            this.Private_PoseGroups.push(pose);
+        }
+    }
+    catch (e)
+    {
+        LogErrorMessage("PosableState.Private_ParseMetaData GUID:  " + this.Private_GlobalImageId, e);
+        throw e;
+    }
+};
+
+PosableState.prototype.Private_LoadDefaults = function ()
+{
+    for (var i = 0; i < this.Private_PoseGroups.length; i++)
+    {
+        var poseGroup = this.Private_PoseGroups[i];
+        if (poseGroup.PoseType == SbtDataEnum.PoseType_Swap)
+        {
+            var poseOption = poseGroup.Public_GetActiveOption();
+            this.Private_CharacterLibrarySwap(poseGroup, poseOption);
+        }
+        if (poseGroup.PoseType == SbtDataEnum.PoseType_Tilt)
+        {
+            this.Private_TiltPose(poseGroup, poseGroup.Public_GetActiveOption());
+        }
+        if (poseGroup.PoseType == SbtDataEnum.PoseType_LibrarySwap)
+        {
+            var poseOption = poseGroup.Public_GetActiveOption();
+            this.Private_GlobalLibrarySwap(poseGroup, poseOption);
+
+        }
+    }
+};
+
+PosableState.prototype.Private_GlobalLibrarySwap = function (libraryPose, libraryPoseOption)
+{
+    var clonePart = MyGlobalSwapLibrary.Public_GetSvgById(libraryPoseOption.LibrarySwapId, this.Position)
+    if (clonePart == null)
+    {
+        //DebugLine("Bad swap: " + libraryPoseOption.LibrarySwapId);
+    }
+    clonePart = clonePart.clone();
+
+    var appendTo = $("#" + libraryPose.Public_GetAppendToId());
+    if (appendTo.length == 0)
+    {
+        //DebugLine("Unable to find appendto: " + this.Private_GlobalImageId + " : " + swapPose.Public_GetAppendToId());
+    }
+
+    appendTo.children().remove();
+
+    appendTo.append(clonePart);
+
+    var clonePartId = "gls_" + new Date().getTime();
+    clonePart.attr("id", clonePartId);
+
+    RecursivelyUpdateChildrenIds(clonePart, SbtDataEnum.GlobalLibraryId, this.Private_ShapeId);
+
+    var clonePartElement = document.getElementById(clonePartId);
+    var bbox = clonePartElement.getBBox();
+
+    var positionPoints = ExtractPositionPoint($("#" + libraryPose.Public_GetStartPointToId()));
+
+    var translateX = positionPoints.X - bbox.x;
+    var translateY = positionPoints.Y - bbox.y;
+
+    clonePart.attr("transform", "translate(" + translateX + ", " + translateY + ")");
+}
+
+PosableState.prototype.Private_CharacterLibrarySwap = function (swapPose, poseOption)
+{
+    try
+    {
+        if (poseOption == null)
+            return;
+
+        var clone = poseOption.Public_GetPoseSvg(swapPose.GlobalImageId);
+
+        RecursivelyUpdateChildrenIds(clone, SbtDataEnum.Id_Storage, this.Private_ShapeId);
+
+        var appendTo = $("#" + swapPose.Public_GetAppendToId());
+        if (appendTo.length == 0)
+        {
+            //DebugLine("Unable to find appendto: " + this.Private_GlobalImageId + " : " + swapPose.Public_GetAppendToId());
+        }
+        appendTo.children().remove();
+
+        appendTo.append(clone);
+
+        //appendTo.append(svg);
+    } catch (e)
+    {
+        LogErrorMessage("PosableState.Private_CharacterLibrarySwap", e);
+    }
+
+};
+
+PosableState.prototype.Private_TiltPose = function (tiltablePose, tiltablePoseOption)
+{
+    try
+    {
+        var degrees = tiltablePoseOption.Degrees;
+        var tiltable = document.getElementById(tiltablePose.Public_GetTiltableId());
+
+        var pivotPointGroup = $("#" + tiltablePose.Public_GetPivotId());
+        var points = ExtractPositionPoint(pivotPointGroup);
+
+        if (degrees == null)
+            return;
+
+        if (pivotPointGroup.length == 0)
+        {
+            LogErrorMessage("Unable to find pivot group: " + tiltablePose.Public_GetTiltableId());
+            return;
+        }
+
+        tiltable.setAttributeNS(null, "transform", "rotate(" + degrees + ", " + points.X + ", " + points.Y + ")");
+        if (tiltablePose.Public_GetTiltable2Id() != null)
+        {
+            var tiltable2 = document.getElementById(tiltablePose.Public_GetTiltable2Id());
+            if (tiltable2 != null)  //Unclear how this is happening, but it is...
+                tiltable2.setAttributeNS(null, "transform", "rotate(" + degrees + ", " + points.X + ", " + points.Y + ")");
+            else
+            {
+                LogErrorMessage("Public_GetTiltable2Id: " + this.Private_GlobalImageId + " " + tiltablePose.Public_GetTiltable2Id());
+            }
+        }
+    }
+    catch (e)
+    {
+        LogErrorMessage("PosableState.Public_TiltPose", e);
+        try
+        {
+            LogErrorMessage("PosableState.Public_TiltPose extra " + this.Private_GlobalImageId + " : " + tiltablePoseOption.Degrees, e);
+            LogErrorMessage("PosableState.Public_TiltPose extra " + tiltablePose.Public_GetTiltableId, e);
+        } catch (e)
+        {
+
+        }
+    }
+
+};
+
+
+
+PosableState.prototype.Public_IsPosable = function ()
+{
+    return this.Private_PoseGroups.length > 0;
+};
+
+PosableState.prototype.Public_PoseGroups = function ()
+{
+    return this.Private_PoseGroups;
+};
+
+PosableState.prototype.Public_GetPreviousPoseList = function ()
+{
+    return this.Private_PreviousPoseList;
+};
+
+PosableState.prototype.Public_SetPreviousPoseList = function (previousPoseList)
+{
+    this.Private_PreviousPoseList = previousPoseList;
+};
+
+PosableState.prototype.Public_UpdatePoseOption = function (pose, poseOption)
+{
+    pose.Public_SetActiveOption(poseOption);
+
+    if (pose.PoseType == SbtDataEnum.PoseType_Swap)
+    {
+        this.Private_CharacterLibrarySwap(pose, poseOption);
+    }
+    else if (pose.PoseType == SbtDataEnum.PoseType_Tilt)
+    {
+        this.Private_TiltPose(pose, poseOption);
+    }
+    else if (pose.PoseType == SbtDataEnum.PoseType_LibrarySwap)
+    {
+        this.Private_GlobalLibrarySwap(pose, poseOption);
+    }
+};
+
+PosableState.prototype.Public_Copy = function (rhs)
+{
+    if (rhs == undefined || rhs == null)
+    {
+        return;
+    }
+
+    this.Private_GlobalImageId = rhs.Private_GlobalImageId;
+    this.Position = rhs.Position;
+
+
+    for (var i = 0; i < rhs.Private_PoseGroups.length; i++)
+    {
+        var rhsPoseGroup = rhs.Private_PoseGroups[i];
+        rhsPoseGroup.Position = rhsPoseGroup.Position || rhs.Position;
+
+        var poseGroup = null;
+
+
+        if (rhsPoseGroup.PoseType == SbtDataEnum.PoseType_Tilt)
+        {
+            poseGroup = new TiltablePose(this.Private_ShapeId, null);
+        }
+        else if (rhsPoseGroup.PoseType == SbtDataEnum.PoseType_Swap)
+        {
+            poseGroup = new CharacterLibrarySwappablePose(this.Private_ShapeId, this.Private_GlobalImageId, null, rhs.Position);
+        }
+        else if (rhsPoseGroup.PoseType == SbtDataEnum.PoseType_LibrarySwap)
+        {
+            poseGroup = new GlobalLibrarySwappablePose(this.Private_ShapeId, null);
+        }
+
+        poseGroup.Public_Copy(rhsPoseGroup);
+        this.Private_PoseGroups.push(poseGroup);
+    }
+};
+
+PosableState.prototype.Private_FindPoseAndOption = function (type, id)
+{
+    var result = new Object();
+
+    for (var i = 0; i < this.Private_PoseGroups.length; i++)
+    {
+        result.PoseGroup = this.Private_PoseGroups[i];
+        result.PoseOption = null;
+
+        if (result.PoseGroup.PoseType == SbtDataEnum.PoseType_Tilt && type == SbtDataEnum.PoseType_Tilt)
+        {
+            result.PoseOption = result.PoseGroup.Public_GetTiltOptionByDegrees(id);
+        }
+        else if (result.PoseGroup.PoseType == SbtDataEnum.PoseType_Swap && type == SbtDataEnum.PoseType_Swap)
+        {
+            result.PoseOption = result.PoseGroup.Public_GetSwapOptionById(id);
+        }
+        else if (result.PoseGroup.PoseType == SbtDataEnum.PoseType_LibrarySwap && type == SbtDataEnum.PoseType_LibrarySwap)
+        {
+            result.PoseOption = result.PoseGroup.Public_GetLibrarySwapOptionById(id);
+        }
+
+        if (result.PoseOption != null)
+            return result;
+    }
+
+
+    return null;
+};
+
+
+PosableState.prototype.Public_GetSafePoseArray = function (poseList)
+{
+    if (poseList == null)
+        return null;
+
+    var poseArray = new Array();
+    for (var i = 0; i < poseList.length; i++)
+    {
+        var poseObject = this.Private_FindPoseAndOption(poseList[i].PoseType, poseList[i].PoseId);
+        if (poseObject != null)
+            poseArray.push(poseObject);
+    }
+    return poseArray;
+};
+
+//#region "Pose Macros"
+
+PosableState.prototype.Private_AddFaces = function (poseList, faceName)
+{
+    poseList.push({ PoseType: SbtDataEnum.PoseType_LibrarySwap, PoseId: "Male-Face-" + faceName });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_LibrarySwap, PoseId: "Male-Face-Crazy-" + faceName });
+
+    poseList.push({ PoseType: SbtDataEnum.PoseType_LibrarySwap, PoseId: "Female-Face-" + faceName });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_LibrarySwap, PoseId: "Female2-Face-" + faceName });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_LibrarySwap, PoseId: "Female2-Face-Crazy-" + faceName });
+
+    poseList.push({ PoseType: SbtDataEnum.PoseType_LibrarySwap, PoseId: "Kid-Female-Face-" + faceName });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_LibrarySwap, PoseId: "Kid-Male-Face-" + faceName });
+
+    poseList.push({ PoseType: SbtDataEnum.PoseType_LibrarySwap, PoseId: "Basic-Male-Face-" + faceName });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_LibrarySwap, PoseId: "Basic-Female-Face-" + faceName });
+
+    poseList.push({ PoseType: SbtDataEnum.PoseType_LibrarySwap, PoseId: "Asian-Face-" + faceName });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_LibrarySwap, PoseId: "Indian-Male-Face-" + faceName });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_LibrarySwap, PoseId: "Indian-Female-Face-" + faceName });
+
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "Face-" + faceName });
+};
+
+
+PosableState.prototype.Private_GetPoseAngry = function ()
+{
+    var poseList = new Array();
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Tilt, PoseId: "0" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "LA-Hips" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "RA-Hips" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "L-Stand" });
+
+    this.Private_AddFaces(poseList, "Mad");
+
+    return poseList;
+};
+
+PosableState.prototype.Private_GetPoseSpeaking = function ()
+{
+    var poseList = new Array();
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Tilt, PoseId: "0" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "LA-Hold" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "RA-Down" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "L-Stand" });
+
+    this.Private_AddFaces(poseList, "MouthOpen");
+
+    return poseList;
+};
+
+PosableState.prototype.Private_GetPoseExplaining = function ()
+{
+    var poseList = new Array();
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Tilt, PoseId: "15" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "LA-Hold" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "RA-Hips" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "L-Stand" });
+
+    this.Private_AddFaces(poseList, "MouthOpen");
+
+    return poseList;
+};
+
+PosableState.prototype.Private_GetPoseSad = function ()
+{
+    var poseList = new Array();
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Tilt, PoseId: "0" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "LA-Across" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "RA-Across" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "L-Stand" });
+
+    this.Private_AddFaces(poseList, "VerySad");
+
+    return poseList;
+};
+
+PosableState.prototype.Private_GetPoseSleeping = function ()
+{
+    var poseList = new Array();
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Tilt, PoseId: "0" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "LA-Across" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "RA-Across" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "L-Stand" });
+
+    this.Private_AddFaces(poseList, "EyesClosed");
+
+    return poseList;
+};
+
+PosableState.prototype.Private_GetPoseComplaining = function ()
+{
+    var poseList = new Array();
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Tilt, PoseId: "-15" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "LA-Hold" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "RA-Hold" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "L-Stand" });
+
+    this.Private_AddFaces(poseList, "Mad");
+
+    return poseList;
+};
+
+PosableState.prototype.Private_GetPoseHolding = function ()
+{
+    var poseList = new Array();
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Tilt, PoseId: "0" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "LA-Down" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "RA-Hold" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "L-Stand" });
+
+    this.Private_AddFaces(poseList, "Happy");
+
+    return poseList;
+};
+
+PosableState.prototype.Private_GetPoseConfusion = function ()
+{
+    var poseList = new Array();
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Tilt, PoseId: "-15" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "LA-Hips" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "RA-Face" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "L-Stand" });
+    this.Private_AddFaces(poseList, "Unsure");
+
+    return poseList;
+};
+
+PosableState.prototype.Private_GetPoseUpset = function ()
+{
+    var poseList = new Array();
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Tilt, PoseId: "0" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "LA-Face" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "RA-Face" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "L-Kneel" });
+    this.Private_AddFaces(poseList, "VerySad");
+
+    return poseList;
+};
+
+PosableState.prototype.Private_GetPoseSit = function ()
+{
+    var poseList = new Array();
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Tilt, PoseId: "0" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "LA-Down" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "RA-Down" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "L-Sit" });
+    this.Private_AddFaces(poseList, "Happy");
+
+    return poseList;
+};
+
+PosableState.prototype.Private_GetPoseDetermined = function ()
+{
+    var poseList = new Array();
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Tilt, PoseId: "0" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "LA-Across" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "RA-Hips" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "L-Stand" });
+
+    this.Private_AddFaces(poseList, "Mad");
+
+    return poseList;
+};
+
+PosableState.prototype.Private_GetPoseHappy = function ()
+{
+    var poseList = new Array();
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Tilt, PoseId: "0" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "LA-Down" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "RA-Down" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "L-Stand" });
+
+    this.Private_AddFaces(poseList, "Happy");
+
+    return poseList;
+};
+
+PosableState.prototype.Private_GetPoseWalking = function ()
+{
+    var poseList = new Array();
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Tilt, PoseId: "0" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "LA-Across" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "RA-Hips" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "L-Walk" });
+
+    this.Private_AddFaces(poseList, "Happy");
+
+    return poseList;
+};
+
+PosableState.prototype.Private_GetPoseShouting = function ()
+{
+    var poseList = new Array();
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Tilt, PoseId: "0" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "LA-Face" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "RA-Face" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "L-Stand" });
+
+    this.Private_AddFaces(poseList, "MouthOpen");
+
+    return poseList;
+};
+
+PosableState.prototype.Private_GetPoseScared = function ()
+{
+    var poseList = new Array();
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Tilt, PoseId: "0" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "LA-Face" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "RA-Face" });
+    poseList.push({ PoseType: SbtDataEnum.PoseType_Swap, PoseId: "L-Nervous" });
+    this.Private_AddFaces(poseList, "Shocked");
+
+    return poseList;
+};
+
+
+//#endregion
+
+
+PosableState.prototype.Public_GetPose = function (instaPose)
+{
+    switch (instaPose)
+    {
+        case InstaPoseEnum.Angry:
+            return this.Private_GetPoseAngry();
+
+        case InstaPoseEnum.Speaking:
+            return this.Private_GetPoseSpeaking();
+
+        case InstaPoseEnum.Explaining:
+            return this.Private_GetPoseExplaining();
+
+        case InstaPoseEnum.Sad:
+            return this.Private_GetPoseSad();
+
+        case InstaPoseEnum.Sleeping:
+            return this.Private_GetPoseSleeping();
+
+        case InstaPoseEnum.Complaining:
+            return this.Private_GetPoseComplaining();
+
+        case InstaPoseEnum.Holding:
+            return this.Private_GetPoseHolding();
+
+        case InstaPoseEnum.Confusion:
+            return this.Private_GetPoseConfusion();
+
+        case InstaPoseEnum.Upset:
+            return this.Private_GetPoseUpset();
+
+        case InstaPoseEnum.Sit:
+            return this.Private_GetPoseSit();
+
+        case InstaPoseEnum.Determined:
+            return this.Private_GetPoseDetermined();
+
+        case InstaPoseEnum.Happy:
+            return this.Private_GetPoseHappy();
+
+        case InstaPoseEnum.Walking:
+            return this.Private_GetPoseWalking();
+
+        case InstaPoseEnum.Shouting:
+            return this.Private_GetPoseShouting();
+
+        case InstaPoseEnum.Scared:
+            return this.Private_GetPoseScared();
+    }
+    return null;
+};

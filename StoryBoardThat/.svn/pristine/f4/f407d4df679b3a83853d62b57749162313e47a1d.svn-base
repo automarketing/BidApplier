@@ -1,0 +1,150 @@
+﻿var CopyHelper = function ()
+{
+    var CopyHelperObject = new Object();
+
+
+    CopyHelperObject.CopyShape = function (e)
+    {
+        if (MyShapesState.Property_SelectedCount == 0)
+        {
+            return;
+        }
+
+        var selectedShapeStates = MyShapesState.Public_GetAllSelectedMovableShapeStates(false);
+        ClearActiveState(); // don't call this before you call getselected!
+
+        CopyShapeHelper(selectedShapeStates, 30, 30, true,false);
+    };
+
+    CopyHelperObject.CopyCell = function (sourceRow, sourceCol, destinationRow, destinationCol)
+    {
+        var sourceCell = $("#" + MyIdGenerator.GenerateCellId(sourceRow, sourceCol));
+        var destinationCell = $("#" + MyIdGenerator.GenerateCellId(destinationRow, destinationCol));
+
+        var deltaX = parseFloat(destinationCell.attr("x")) - parseFloat(sourceCell.attr("x"));
+        var deltaY = parseFloat(destinationCell.attr("y")) - parseFloat(sourceCell.attr("y"));
+
+
+        var shapeStatesAndParts = StoryboardContainer.GetShapeStatesForCell(sourceRow, sourceCol);
+
+        var toCopyShapes = new Array();
+        toCopyShapes = shapeStatesAndParts[StoryboardPartTypeEnum.StoryboardCell].concat(shapeStatesAndParts[StoryboardPartTypeEnum.StoryboardCellTitle], shapeStatesAndParts[StoryboardPartTypeEnum.StoryboardCellDescription]);
+
+        CopyShapeHelper(toCopyShapes, deltaX, deltaY, false,true);
+
+        if (CellConfiguration.HasTitle || CellConfiguration.HasDescription)
+        {
+            var titleGrid = null;
+            var descriptionGrid = null;
+
+            if (CellConfiguration.HasTitle)
+            {
+                var copyTo = MyShapesState.Public_GetShapeStateById(MyIdGenerator.GenerateTitleCellId(destinationRow, destinationCol));
+                var copyFrom = MyShapesState.Public_GetShapeStateById(MyIdGenerator.GenerateTitleCellId(sourceRow, sourceCol));
+                CopyUnmovableText(copyTo, copyFrom);
+            }
+
+            if (CellConfiguration.HasDescription)
+            {
+                var copyTo = MyShapesState.Public_GetShapeStateById(MyIdGenerator.GenerateDescriptionCellId(destinationRow, destinationCol));
+                var copyFrom = MyShapesState.Public_GetShapeStateById(MyIdGenerator.GenerateDescriptionCellId(sourceRow, sourceCol));
+                CopyUnmovableText(copyTo, copyFrom);
+            }
+
+        }
+        ClearActiveState();
+    };
+
+    function CopyShapeHelper(selectedShapeStates, xOffset, yOffset, useSafetyMargins, copyLockState)
+    {
+        try
+        {
+            var newShapes = new Array();
+
+
+            selectedShapeStates.sort(Sorters.SortShapeStatesByIndex);
+
+            for (var i = 0; i < selectedShapeStates.length; i++)
+            {
+                var active = selectedShapeStates[i];
+                var id = active.Id + "_natural";
+                var shape = $("#" + id).clone();
+
+                StoryboardContainer.UpdateGradientIds(shape);
+
+                var x = active.X + xOffset;  // this is correct because hte copy will have the same screwy offsets, possible some issues, but i think ok abs 8/13/13
+                var y = active.Y + yOffset;
+
+                if (useSafetyMargins)
+                {
+                    if (x + 50 > $("#CoreSvg").width())
+                    {
+                        x = active.X - xOffset;
+                    }
+                    if (y + 50 > $("#CoreSvg").height())
+                    {
+                        y = active.Y - yOffset;
+                    }
+                }
+
+                var newShape = AddSvg.AddSvgToStoryboard(shape, x, y, false);
+                newShapes.push(newShape);
+
+                var newShapeState = MyShapesState.Public_GetShapeStateByShape(newShape);
+
+                newShapeState.CopyShapeState(active);
+                newShapeState.MoveTo(x, y);
+
+                if (copyLockState)
+                {
+                    newShapeState.IsLocked = active.IsLocked;
+                }
+            }
+
+            var undoArray = new Array();
+            var redoArray = new Array();
+            for (var j = 0; j < newShapes.length; j++)
+            {
+                var newShape = newShapes[j];
+                var id = newShape.attr("id");
+
+                undoArray.push({ Id: id });
+                redoArray.push({ Id: id, Detached: newShape, NextShapeId: newShape.next().attr("id"), ShapeState: MyShapesState.Public_GetShapeStateById(id) });
+
+                MyShapesState.Public_SelectShape(newShape);
+            }
+
+            MyShapesState.Property_SetCurrentShapeAction(ShapeActionEnum.Selected);
+            // UndoManager.register(undefined, UndoShapeAdd, [{ Id: newShapeId }], undefined, '', UndoDeleteShape, [{ Detached: jq, NextShapeId: "SvgTop", Id: newShapeId, ShapeState: MyShapesState.Public_GetShapeStateById(newShapeId) }]);
+            UndoManager.register(undefined, UndoShapeAdd, undoArray, undefined, '', UndoDeleteShape, redoArray, '');
+
+            UpdateActiveDrawing();
+        }
+        catch (e)
+        {
+            LogErrorMessage("SvgManip.CopyShapeHelper", e);
+        }
+    }
+
+    function CopyUnmovableText(copyTo, copyFrom)
+    {
+        if (copyTo == null || copyFrom == null)
+            return;
+
+        // if there is already non default text, don't copy it!
+        if (copyTo.TextState.Text != "" && copyTo.TextState.Text != copyTo.TextState.DefaultText)
+            return;
+
+        // if there is no text, or just default text, don't copy it
+        if (copyFrom.TextState.Text == "" || copyFrom.TextState.Text == copyFrom.TextState.DefaultText)
+            return;
+
+        //copies text and font
+        copyTo.TextState.CopyFontStyles(copyFrom.TextState.Public_GetFontStyles());
+        copyTo.ColorableState.Public_CopyColorStyles(copyFrom.ColorableState.Public_GetColorStyles());
+        copyTo.UpdateDrawing();
+
+    };
+
+    return CopyHelperObject;
+}();

@@ -1,0 +1,471 @@
+﻿/// <reference path="Config/this.Layouts/SpiderLayout.js" />
+
+function CycleLayout(enableTitle, enableDescription, scale)
+{
+    SpiderLayout.call(this, enableTitle, enableDescription, scale, 12);
+
+    this.LayoutType = StoryboardLayoutType.Cycle;
+    this.IdPrefix = "cycle-chart-arrow";
+    this.ArrowStrokeWidth = "6";
+    this.DefaultColor = "black";
+    this.DefaultFill = "none";
+
+    this.Row1PaddingLeft = 4 * this._Padding;
+    this.ContainerBorderPaddingRight = 3 * this._Padding;
+    this.ContainerBorderPaddingBottom = 3 * this._Padding;
+    this.Row1PaddingTop = 4 * this._Padding;
+    
+};
+
+inheritPrototype(CycleLayout, SpiderLayout);
+
+CycleLayout.prototype.IdGen = function (id1, id2) {
+    return this.IdPrefix + "-" + id1 + "-to-" + id2;
+}
+CycleLayout.prototype.GetLayoutLines = function (rows, cols) {
+    // Complete override; totally different from Spider layout
+
+    var g = SvgCreator.CreateSvgGroup("cycle-chart");
+    var stroke = "stroke:black; stroke-width:" + this._ChartGridStrokeWidth + "px; ";
+    var titleZone = this.GetAnchorPoints(this._AreaTitlePosition(0, 0));
+
+    // Box the cells
+    for (var thisCellId = 0; thisCellId < cols; thisCellId++) {
+        var nextCellId = (thisCellId + 1) % cols;
+        // First, create a nice box around this cell
+        var anchorBox = this.GetAnchorPoints(this._CellAnchorPoint(thisCellId));
+        var nextAnchorBox = this.GetAnchorPoints(this._CellAnchorPoint(nextCellId));
+        var rect = SvgCreator.AddRect(anchorBox.X, anchorBox.Y, anchorBox.Width, anchorBox.Height, "black", "none", null, null, "outerbox_" + thisCellId);
+        rect.setAttributeNS(null, "stroke-width", this._ChartGridStrokeWidth + "px");
+
+        g.appendChild(rect);
+    }
+
+    var cellAnchorPoint = [];
+    for (var i = 0; i < cols; ++i) {
+        cellAnchorPoint.push(this.GetAnchorPoints(this._CellAnchorPoint(i)));
+    }
+
+                var radii = new Point(Math.abs(titleZone.Center.X - cellAnchorPoint[1].MiddleX), Math.abs(titleZone.Center.Y - cellAnchorPoint[0].MiddleY));
+
+    switch (cols) {
+        case 3: 
+            var radii = new Point(Math.abs(titleZone.Center.X - cellAnchorPoint[1].MiddleX), Math.abs(titleZone.Center.Y - cellAnchorPoint[0].MiddleY));
+
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[0].Right, cellAnchorPoint[0].MiddleY),
+                new Point(cellAnchorPoint[1].MiddleX, cellAnchorPoint[1].Top),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[1].Left, cellAnchorPoint[1].MiddleY),
+                new Point(cellAnchorPoint[2].Right, cellAnchorPoint[2].MiddleY),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[2].MiddleX, cellAnchorPoint[2].Top),
+                new Point(cellAnchorPoint[0].Left, cellAnchorPoint[0].MiddleY),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            break;
+
+        case 4:
+            var radii = new Point(Math.abs(titleZone.Center.X - cellAnchorPoint[1].MiddleX), Math.abs(titleZone.Center.Y - cellAnchorPoint[0].MiddleY));
+            var radiiLeftRight = new Point(radii.X / 2.5, radii.Y);
+
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[0].Right, cellAnchorPoint[0].NearTop),
+                new Point(cellAnchorPoint[1].Left, cellAnchorPoint[1].NearTop),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radiiLeftRight,
+                new Point(cellAnchorPoint[1].Right, (cellAnchorPoint[1].NearBottom + cellAnchorPoint[1].MiddleY)/2),
+                new Point(cellAnchorPoint[2].Right, (cellAnchorPoint[2].NearTop + cellAnchorPoint[2].MiddleY)/2),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[2].Left, cellAnchorPoint[2].NearBottom),
+                new Point(cellAnchorPoint[3].Right, cellAnchorPoint[3].NearBottom),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radiiLeftRight,
+                new Point(cellAnchorPoint[3].Left, (cellAnchorPoint[3].NearTop + cellAnchorPoint[3].MiddleY) / 2),
+                new Point(cellAnchorPoint[0].Left, (cellAnchorPoint[0].NearBottom + cellAnchorPoint[0].MiddleY) / 2),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            break;
+
+        case 5:
+            var radiiTop = new Point(Math.abs(titleZone.Center.X - cellAnchorPoint[1].MiddleX), Math.abs(titleZone.Center.Y - cellAnchorPoint[0].NearTop));
+            var radiiBottom = new Point(Math.abs(titleZone.Center.X - cellAnchorPoint[1].MiddleX), Math.abs(titleZone.Center.Y - cellAnchorPoint[1].MiddleY));
+            g.appendChild(SvgCreator.AddEllipsisArc(radiiTop,
+                new Point(cellAnchorPoint[0].MiddleX, cellAnchorPoint[0].Top),
+                new Point(cellAnchorPoint[1].MiddleX, cellAnchorPoint[1].Top),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radiiTop,
+                new Point(cellAnchorPoint[1].Right, (cellAnchorPoint[1].NearBottom + cellAnchorPoint[1].MiddleY) / 2),
+                new Point(cellAnchorPoint[2].Right, (cellAnchorPoint[2].NearTop + cellAnchorPoint[2].MiddleY) / 2),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radiiBottom,
+                new Point(cellAnchorPoint[2].Left, cellAnchorPoint[2].NearBottom),
+                new Point(cellAnchorPoint[3].Right, cellAnchorPoint[3].NearBottom),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radiiTop,
+                new Point(cellAnchorPoint[3].Left, (cellAnchorPoint[3].NearTop + cellAnchorPoint[3].MiddleY) / 2),
+                new Point(cellAnchorPoint[4].Left, (cellAnchorPoint[4].NearBottom + cellAnchorPoint[4].MiddleY) / 2),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radiiTop,
+                new Point(cellAnchorPoint[4].MiddleX, cellAnchorPoint[4].Top),
+                new Point(cellAnchorPoint[0].MiddleX, cellAnchorPoint[0].Top),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            break;
+
+        case 6:
+            var radii = new Point(Math.abs(titleZone.Center.X - cellAnchorPoint[1].MiddleX), Math.abs(titleZone.Center.Y - cellAnchorPoint[0].NearTop));
+
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[0].MiddleX, cellAnchorPoint[0].Top),
+                new Point(cellAnchorPoint[1].MiddleX, cellAnchorPoint[1].Top),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[1].Right, (cellAnchorPoint[1].NearBottom + cellAnchorPoint[1].MiddleY) / 2),
+                new Point(cellAnchorPoint[2].Right, (cellAnchorPoint[2].NearTop + cellAnchorPoint[2].MiddleY) / 2),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[2].MiddleX, cellAnchorPoint[2].Bottom),
+                new Point(cellAnchorPoint[3].MiddleX, cellAnchorPoint[3].Bottom),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[3].MiddleX, cellAnchorPoint[3].Bottom),
+                new Point(cellAnchorPoint[4].MiddleX, cellAnchorPoint[4].Bottom),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[4].Left, (cellAnchorPoint[4].NearTop + cellAnchorPoint[4].MiddleY) / 2),
+                new Point(cellAnchorPoint[5].Left, (cellAnchorPoint[5].NearBottom + cellAnchorPoint[5].MiddleY) / 2),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[5].MiddleX, cellAnchorPoint[5].Top),
+                new Point(cellAnchorPoint[0].MiddleX, cellAnchorPoint[0].Top),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            break;
+
+        case 7:
+            var radii = new Point(Math.abs(titleZone.Center.X - cellAnchorPoint[1].MiddleX), Math.abs(titleZone.Center.Y - cellAnchorPoint[0].NearTop));
+            var radiiBottom = new Point(Math.abs(titleZone.Center.X - cellAnchorPoint[2].MiddleX), Math.abs(titleZone.Center.Y - cellAnchorPoint[3].NearBottom));
+
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[0].MiddleX, cellAnchorPoint[0].Top),
+                new Point(cellAnchorPoint[1].MiddleX, cellAnchorPoint[1].Top),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[1].Right, cellAnchorPoint[1].NearTop),
+                new Point(cellAnchorPoint[2].MiddleX, cellAnchorPoint[2].Top),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[2].MiddleX, cellAnchorPoint[2].Bottom),
+                new Point(cellAnchorPoint[3].Right, cellAnchorPoint[3].NearBottom),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[3].Left, cellAnchorPoint[3].NearBottom),
+                new Point(cellAnchorPoint[4].Right, cellAnchorPoint[4].NearBottom),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[4].Left, cellAnchorPoint[4].NearBottom),
+                new Point(cellAnchorPoint[5].MiddleX, cellAnchorPoint[5].Bottom),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[5].MiddleX, cellAnchorPoint[5].Top),
+                new Point(cellAnchorPoint[6].Left, cellAnchorPoint[6].NearTop),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[6].MiddleX, cellAnchorPoint[6].Top),
+                new Point(cellAnchorPoint[0].MiddleX, cellAnchorPoint[0].Top),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            break;
+
+        case 8:
+            var radii = new Point(Math.abs(titleZone.Center.X - cellAnchorPoint[1].MiddleX), Math.abs(titleZone.Center.Y - cellAnchorPoint[0].NearTop));
+
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[0].MiddleX, cellAnchorPoint[0].Top),
+                new Point(cellAnchorPoint[1].MiddleX, cellAnchorPoint[1].Top),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[1].Right, cellAnchorPoint[1].NearTop),
+                new Point(cellAnchorPoint[2].MiddleX, cellAnchorPoint[2].Top),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[2].MiddleX, cellAnchorPoint[2].Bottom),
+                new Point(cellAnchorPoint[3].Right, cellAnchorPoint[3].NearBottom),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[3].MiddleX, cellAnchorPoint[3].Bottom),
+                new Point(cellAnchorPoint[4].MiddleX, cellAnchorPoint[4].Bottom),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[4].MiddleX, cellAnchorPoint[4].Bottom),
+                new Point(cellAnchorPoint[5].MiddleX, cellAnchorPoint[5].Bottom),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[5].Left, cellAnchorPoint[5].NearBottom),
+                new Point(cellAnchorPoint[6].MiddleX, cellAnchorPoint[6].Bottom),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[6].MiddleX, cellAnchorPoint[6].Top),
+                new Point(cellAnchorPoint[7].Left, cellAnchorPoint[7].NearTop),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[7].MiddleX, cellAnchorPoint[7].Top),
+                new Point(cellAnchorPoint[0].MiddleX, cellAnchorPoint[0].Top),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            break;
+        case 9:
+            var radii = new Point(Math.abs(titleZone.Center.X - cellAnchorPoint[1].MiddleX), Math.abs(titleZone.Center.Y - ((cellAnchorPoint[0].MiddleY + cellAnchorPoint[0].NearTop)/2)));
+            var radiiSides = new Point(Math.abs(titleZone.Center.X - cellAnchorPoint[1].MiddleX), Math.abs(titleZone.Center.Y - cellAnchorPoint[0].NearTop));
+
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[0].MiddleX, cellAnchorPoint[0].Top),
+                new Point(cellAnchorPoint[1].MiddleX, cellAnchorPoint[1].Top),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[1].MiddleX, cellAnchorPoint[1].Top),
+                new Point(cellAnchorPoint[2].MiddleX, cellAnchorPoint[2].Top),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radiiSides,
+                new Point(cellAnchorPoint[2].Right, cellAnchorPoint[2].MiddleY),
+                new Point(cellAnchorPoint[3].Right, cellAnchorPoint[3].MiddleY),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[3].MiddleX, cellAnchorPoint[3].Bottom),
+                new Point(cellAnchorPoint[4].MiddleX, cellAnchorPoint[4].Bottom),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[4].NearLeft, cellAnchorPoint[4].Bottom),
+                new Point(cellAnchorPoint[5].NearRight, cellAnchorPoint[5].Bottom),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[5].MiddleX, cellAnchorPoint[5].Bottom),
+                new Point(cellAnchorPoint[6].MiddleX, cellAnchorPoint[6].Bottom),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radiiSides,
+                new Point(cellAnchorPoint[6].Left, cellAnchorPoint[6].MiddleY),
+                new Point(cellAnchorPoint[7].Left, cellAnchorPoint[7].MiddleY),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[7].MiddleX, cellAnchorPoint[7].Top),
+                new Point(cellAnchorPoint[8].MiddleX, cellAnchorPoint[8].Top),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[8].MiddleX, cellAnchorPoint[8].Top),
+                new Point(cellAnchorPoint[0].MiddleX, cellAnchorPoint[0].Top),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            break;
+        case 10:
+            var radii = new Point(Math.abs(titleZone.Center.X - cellAnchorPoint[1].MiddleX), Math.abs(titleZone.Center.Y - ((cellAnchorPoint[0].MiddleY + cellAnchorPoint[0].NearTop) / 2)));
+            var radiiSides = new Point(Math.abs(titleZone.Center.X - cellAnchorPoint[1].MiddleX), Math.abs(titleZone.Center.Y - cellAnchorPoint[0].NearTop));
+
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[0].MiddleX, cellAnchorPoint[0].Top),
+                new Point(cellAnchorPoint[1].MiddleX, cellAnchorPoint[1].Top),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[1].MiddleX, cellAnchorPoint[1].Top),
+                new Point(cellAnchorPoint[2].MiddleX, cellAnchorPoint[2].Top),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radiiSides,
+                new Point(cellAnchorPoint[2].Right, cellAnchorPoint[2].MiddleY),
+                new Point(cellAnchorPoint[3].Right, cellAnchorPoint[3].MiddleY),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            for (var i = 3; i < 7; ++i) {
+                g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                    new Point(this.GetAnchorPoints(this._CellAnchorPoint(i)).MiddleX, this.GetAnchorPoints(this._CellAnchorPoint(i)).Bottom),
+                    new Point(this.GetAnchorPoints(this._CellAnchorPoint(i + 1)).MiddleX, this.GetAnchorPoints(this._CellAnchorPoint(i + 1)).Bottom),
+                    this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            }
+            g.appendChild(SvgCreator.AddEllipsisArc(radiiSides,
+                new Point(cellAnchorPoint[7].Left, cellAnchorPoint[7].MiddleY),
+                new Point(cellAnchorPoint[8].Left, cellAnchorPoint[8].MiddleY),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[8].MiddleX, cellAnchorPoint[8].Top),
+                new Point(cellAnchorPoint[9].MiddleX, cellAnchorPoint[9].Top),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            g.appendChild(SvgCreator.AddEllipsisArc(radii,
+                new Point(cellAnchorPoint[9].MiddleX, cellAnchorPoint[9].Top),
+                new Point(cellAnchorPoint[0].MiddleX, cellAnchorPoint[0].Top),
+                this.DefaultColor, this.DefaultFill, this.ArrowStrokeWidth, this.IdGen(thisCellId, nextCellId)));
+            break;
+
+        default:
+            // We don't acutally know!  Don't do anything...
+            break;
+    }
+
+    return g;
+
+};
+
+CycleLayout.prototype._OutsideEdgeCenter = function (cellId, cols, targetId) {
+    var cellAnchorBox = this.GetAnchorPoints(this._CellAnchorPoint(cellId));
+    var titleAnchorBox = this.GetAnchorPoints(this._AreaTitlePosition(0, 0));
+    var targetAnchorBox = this.GetAnchorPoints(this._CellAnchorPoint(targetId));
+
+    // are there cells directly to the left?
+    var cellCovered = { left: false, right: false, top: false, bottom: false };
+    var nextCellCovered = { left: false, right: false, top: false, bottom: false };
+
+    cellCovered = this._GetCovered(cellCovered, cellId, cols, titleAnchorBox, cellAnchorBox, targetAnchorBox);
+    nextCellCovered = this._GetCovered(nextCellCovered, targetId, cols, titleAnchorBox, cellAnchorBox, targetAnchorBox);
+
+    
+
+
+    var ret = null;
+    var rets = [];
+    var testpoint = null;
+    var testdistance = null;
+    var distance = 999999999;
+    var titleDistances = [0,0];
+    var testtitleDistance = null;
+
+
+
+    var targetLeft = cellAnchorBox.Left > targetAnchorBox.Right;
+    var targetTop = cellAnchorBox.Top > targetAnchorBox.Bottom;
+
+    //O(n^2) cost (specifically here, 4^2)
+    for (var coveredKey in cellCovered) {
+        var cellPoint = this._GetPointPreference(cellCovered, cellAnchorBox, targetTop, targetLeft);
+        for (var nextCoveredKey in nextCellCovered) {
+            // Find the best uncovered spot; closest to its target, or in the case of a tie, farthest from the title.
+            if (!cellCovered[coveredKey] && !nextCellCovered[nextCoveredKey]) {
+                continue;
+            }
+            var nextCellPoint = this._GetPointPreference(nextCellCovered, cellAnchorBox, !targetTop, !targetLeft);
+            testdistance = MathUtils.CartesianSegmentLength(cellPoint, nextCellPoint);
+            testtitledistance = MathUtils.CartesianSegmentLength(cellPoint, titleAnchorBox.centerPoint) + MathUtils.CartesianSegmentLength(nextCellPoint, titleAnchorBox.centerPoint); // todo: pick the point closered to the cell instead of center
+            //console.log("Testing: CellId;" + cellId + ", Source:", +  cellPoint.X + "," + cellPoint.Y + ", Target:" + nextCellPoint.X + "," + nextCellPoint.Y + ", TestDistance:" + testdistance + "(" + distance + ") " + ", testTitleDistance:" + testtitledistance + "(" + titleDistance + ") ");
+            if (testdistance < distance || (testdistance == distance && testtitledistance > titleDistance)) {
+ 
+                rets["source"] = cellPoint;
+                rets["target"] = nextCellPoint;
+                distance = testdistance;
+                titledistance = testtitledistance;
+            }
+        }
+    }
+
+    return rets;
+}
+
+CycleLayout.prototype._GetPointPreference = function (covered, cellAnchorBox, targetTop, targetLeft) {
+    for (var key in covered) {
+        switch (key) {
+            case "left":
+                return new Point(cellAnchorBox.Left, (targetTop) ? cellAnchorBox.NearTop : cellAnchorBox.NearBottom);
+            case "right":
+                return new Point(cellAnchorBox.Right, (targetTop) ? cellAnchorBox.NearTop : cellAnchorBox.NearBottom);
+            case "top":
+                return new Point(cellAnchorBox.MiddleX, (targetLeft) ? cellAnchorBox.NearLeft : cellAnchorBox.NearRight);
+            case "bottom":
+                return new Point(cellAnchorBox.MiddleX, (targetLeft) ? cellAnchorBox.NearLeft : cellAnchorBox.NearRight);
+        }
+    }
+}
+
+CycleLayout.prototype._GetCovered = function (covered, cellId, cols, titleAnchorBox, cellAnchorBox, testAnchorBox)
+{
+    for (var thisCellId = 0; thisCellId < cols; thisCellId++) {
+        var testAnchorBox;
+        if (thisCellId == cellId) {
+            // Do the title instead
+            testAnchorBox = titleAnchorBox;
+            continue;
+        } else {
+            testAnchorBox = this.GetAnchorPoints(this._CellAnchorPoint(thisCellId));
+        }
+
+        if (!(cellAnchorBox.Top > testAnchorBox.Bottom || cellAnchorBox.Bottom < testAnchorBox.Top)) {
+            // Covered, left or right
+            if (cellAnchorBox.X < testAnchorBox.X) {
+                covered["right"] = true;
+            } else {
+                covered["left"] = true;
+            }
+        }
+
+        if (!(cellAnchorBox.Right < testAnchorBox.Left || cellAnchorBox.Left > testAnchorBox.Right)) {
+            // Covered, top or bottom
+            if (cellAnchorBox.Y > testAnchorBox.Y) {
+                covered["top"] = true;
+            } else {
+                covered["bottom"] = true;
+            }
+        }
+    }
+
+    return covered;
+}
+
+CycleLayout.prototype._InitializeCellLayouts = function ()
+{
+    // Complete override; not calling parent!
+    this.Layouts = new Object();
+
+    this.Layouts["6A"] = new SpiderCellLocation("6A", 1, 0, 0);
+    this.Layouts["6B"] = new SpiderCellLocation("6B", 2, 0, .25);
+    this.Layouts["6C"] = new SpiderCellLocation("6C", 2, 1, -.25);
+    this.Layouts["6D"] = new SpiderCellLocation("6D", 1, 1, 0);
+    this.Layouts["6E"] = new SpiderCellLocation("6E", 0, 1, -.25);
+    this.Layouts["6F"] = new SpiderCellLocation("6F", 0, 0, .25);
+
+    this.Layouts["8A"] = new SpiderCellLocation("8A", 2, 0, 0);
+    this.Layouts["8B"] = new SpiderCellLocation("8B", 3, 0, .25);
+    this.Layouts["8C"] = new SpiderCellLocation("8C", 4, 0, .85);
+    this.Layouts["8D"] = new SpiderCellLocation("8D", 3, 1, -.25);
+    this.Layouts["8E"] = new SpiderCellLocation("8E", 2, 1, 0);
+    this.Layouts["8F"] = new SpiderCellLocation("8F", 1, 1, -.25);
+    this.Layouts["8G"] = new SpiderCellLocation("8G", 0, 0, .85);
+    this.Layouts["8H"] = new SpiderCellLocation("8H", 1, 0, .25);
+
+    this.Layouts["10A"] = new SpiderCellLocation("10A", 2, 0, 0);
+    this.Layouts["10B"] = new SpiderCellLocation("10B", 3, 0, .15);
+    this.Layouts["10C"] = new SpiderCellLocation("10C", 4, 0, .30);
+    this.Layouts["10D"] = new SpiderCellLocation("10D", 4, 1, -.30);
+    this.Layouts["10E"] = new SpiderCellLocation("10E", 3, 1, -.15);
+    this.Layouts["10F"] = new SpiderCellLocation("10F", 2, 1, 0);
+    this.Layouts["10G"] = new SpiderCellLocation("10G", 1, 1, -.15);
+    this.Layouts["10H"] = new SpiderCellLocation("10H", 0, 1, -.30);
+    this.Layouts["10I"] = new SpiderCellLocation("10I", 0, 0, .30);
+    this.Layouts["10J"] = new SpiderCellLocation("10J", 1, 0, .15);
+
+    
+    this.Layouts[3] = ["6A", "6C", "6E"];
+    this.Layouts[4] = ["6F", "6B", "6C", "6E" ];
+    this.Layouts[5] = ["6A", "6B", "6C", "6E", "6F"];
+    this.Layouts[6] = ["6A", "6B", "6C", "6D", "6E", "6F"];
+    this.Layouts[7] = ["8A", "8B", "8C", "8D", "8F", "8G", "8H"];
+    this.Layouts[8] = ["8A", "8B", "8C", "8D", "8E", "8F", "8G", "8H"];
+    this.Layouts[9] = ["10A", "10B", "10C", "10D", "10E", "10G", "10H", "10I", "10J"];
+    this.Layouts[10] = ["10A", "10B", "10C", "10D", "10E", "10F", "10G", "10H", "10I", "10J"];
+
+
+    //// proxy data for changing to a frayer model
+    this.Layouts[1] = ["6A", "6C", "6E"];
+    this.Layouts[2] = ["6A", "6C", "6E"];
+};
+
+
+CycleLayout.prototype._VirtualRows = function (cols) {
+    // Complete override of parent
+    return 2;
+};
+
+CycleLayout.prototype.GetStoryboardContentBounds = function (rows, cols) {
+    rows = this._VirtualRows(cols);
+    cols = this._VirtualCols(cols);
+
+    var boxPosition = new BoxPosition();
+
+    boxPosition.X = 0;
+    boxPosition.Y = 0;
+
+    boxPosition.Width = this.Row1PaddingLeft + (cols * (this.FullColumnWidth()));
+    boxPosition.Height = this.Row1PaddingTop + (rows * this.FullRowHeight()) - this.BetweenRowPadding;
+
+    return boxPosition;
+};
+

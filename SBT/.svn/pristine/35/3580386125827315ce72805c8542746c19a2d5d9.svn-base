@@ -1,0 +1,59 @@
+﻿/// <reference path="SvgManip.js" />
+
+function SbtMathLibrary()
+{
+
+    this.DegreesFromRadians =function(radians)
+    {
+        return radians * (180 / Math.PI);
+    };
+
+    this.CalculateAngle = function (centerX, centerY, newX, newY, oldX, oldY)
+    {
+        var angle = 2;
+
+        var lengthLastPoint = centerX - oldX;
+        var heightLastPoint = centerY - oldY;
+        var hypotonuseLastPoint = Math.sqrt((lengthLastPoint * lengthLastPoint) + (heightLastPoint * heightLastPoint));
+        var radiansLastPoint = Math.asin(heightLastPoint / hypotonuseLastPoint);
+        var angleLastPoint = this.DegreesFromRadians(radiansLastPoint);
+
+        var lengthNewPoint = centerX - newX;
+        var heightNewPoint = centerY - newY;
+        var hypotonuseNewPoint = Math.sqrt((lengthNewPoint * lengthNewPoint) + (heightNewPoint * heightNewPoint));
+        var radiansNewPoint = Math.asin(heightNewPoint / hypotonuseNewPoint);
+        var angleNewPoint = this.DegreesFromRadians(radiansNewPoint);
+        //LogDebug(angleNewPoint + " - cx:" + centerX + " cy: " + centerY + " nx:" + newX + " ny: " + newY);
+
+        angle = angleLastPoint - angleNewPoint;
+
+        if (newX < centerX)
+        {
+            angle = angle * -1;
+        }
+
+        return angle;
+    };
+
+    //Todo - move LOTS of code to use this... have re-written so many time... abs 6/27/14
+    this.ScaleAndCenter=function(elementId, maxWidth, maxHeight, xPadding, yPadding)
+    {
+        var bb = document.getElementById(elementId).getBBox();
+        var xScale = (maxWidth - xPadding) / bb.width;
+        var yScale = (maxHeight - yPadding) / bb.height;
+        var scale = Math.min(xScale, yScale);
+
+        var centerX = (maxWidth - ((bb.width) * scale)) / 2;
+        centerX -= (bb.x * scale);      //does the "natural offset"
+
+        var centerY = (maxHeight - ((bb.height) * scale)) / 2;
+        centerY -= (bb.y * scale);
+
+        var retVal = new Object();
+        retVal.CenterX = centerX;
+        retVal.CenterY = centerY;
+        retVal.Scale = scale;
+
+        return retVal;
+    }
+}

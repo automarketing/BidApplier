@@ -1,0 +1,695 @@
+﻿/// <reference path="../svgManip.js" />
+
+function ResizeImageAction()
+{
+    //Properties
+    this.ActiveShape = null;
+
+    this.UndoLog = new Object;
+
+    this.ResizeDirection = null;
+
+    this.Public_StartResize = function (activeShapeState, resizedShapeId)
+    {
+        this.ResizeDirection = DetermineResizeDirection(resizedShapeId);
+        this.ActiveShape = activeShapeState;
+
+        var selectedShapeStates = MyShapesState.Public_GetAllSelectedShapeStates();
+        for (var i = 0; i < selectedShapeStates.length; i++)
+        {
+            var shapeState = selectedShapeStates[i];
+            var dims = shapeState.Public_GetVisibleShapeDimensions();
+
+            var useSprings = false;
+            if (this.ResizeDirection == ResizeEnum.N || this.ResizeDirection == ResizeEnum.S || this.ResizeDirection == ResizeEnum.E || this.ResizeDirection == ResizeEnum.W)
+                useSprings = true;
+
+            if (useSprings && shapeState.IsSpringable())
+            {
+                this.UndoLog[shapeState.Id] = {
+                    Transforms: shapeState.SpringableState.GetSpringStateTransforms(),
+                    SvgSize: SvgCreator.GetSvgSize(shapeState.Id + "_svgImage"),
+                    MoveX: shapeState.X,
+                    MoveY: shapeState.Y,
+                    UseClipping: shapeState.UseClipping,
+                    ClipHeight: shapeState.ClipHeight,
+                    ClipWidth: shapeState.ClipWidth,
+                    IsSpringable: true
+                };
+            }
+            else
+            {
+                this.UndoLog[shapeState.Id] = {
+                    ScaleX: shapeState.ScaleX,
+                    ScaleY: shapeState.ScaleY,
+                    MoveX: shapeState.X,
+                    MoveY: shapeState.Y,
+                    Width: dims.width,
+                    Height: dims.height,
+                    IsSpringable: false
+                };
+            }
+        }
+    };
+
+
+    this.Public_ResizeShapes = function(e)
+    {
+        var newP ={ x: PageXtoStoryboardX(e.pageX) , y: PageYtoStoryboardY(e.pageY) };
+        var listOutP = this.ActiveShape.Public_GetImaginaryOuterPoints();
+ 
+
+        // private data in svg object co-ordinate
+        var privateBoxArea =  this.ActiveShape.Private_GetSelectionBoxArea(0);
+        var rot_cen = { x : privateBoxArea.Width / 2   , y : privateBoxArea.Height / 2 };
+ 
+        var iNW = 0;
+        var iNE = 1;
+        var iSW = 2;
+        var iSE = 3;
+
+        var vecBoxMove = { x: 0 , y: 0 };
+        var XScale = 1 , YScale = 1;
+
+        var vec_Y_DIR =   { x: listOutP[iSW].x - listOutP[iNW].x , y: listOutP[iSW].y - listOutP[iNW].y };
+        var vec_X_DIR =   { x: listOutP[iNE].x - listOutP[iNW].x , y: listOutP[iNE].y - listOutP[iNW].y };
+ 
+        switch( this.ResizeDirection )
+        {
+            case ResizeEnum.SW:
+                // USE NE_SW line
+                {
+                    var vec_NE_SW =   { x: listOutP[iSW].x - listOutP[iNE].x , y: listOutP[iSW].y - listOutP[iNE].y };
+                    
+                    var vec_SW_newP = { x: newP.x          - listOutP[iSW].x , y: newP.y          - listOutP[iSW].y };
+                    var vec_Project_othog = SbtMath.ProjectAtoB( vec_SW_newP , vec_NE_SW );
+                    XScale =  -SbtMath.ProjectAtoBScale( vec_Project_othog , vec_X_DIR ) + 1;  // 
+                    YScale =   SbtMath.ProjectAtoBScale( vec_Project_othog , vec_Y_DIR ) + 1;
+                    rot_cen = {x: rot_cen.x * XScale , y: rot_cen.y * YScale };
+                    var SW_moved_inner_coordinate = { x : privateBoxArea.Left * XScale  , y : privateBoxArea.Bottom * YScale };                      
+                    var SW_moved = this.ActiveShape.ConvertCoordinateToBase( SW_moved_inner_coordinate , rot_cen );
+                    var SW_should_go = { x: listOutP[iSW].x + vec_Project_othog.x , y: listOutP[iSW].y + vec_Project_othog.y };
+                    // SW_moved should go to 
+                    vecBoxMove = { x: SW_should_go.x - SW_moved.x , y: SW_should_go.y - SW_moved.y };                    
+                }
+                break;
+            case ResizeEnum.NE:
+                // USE SW-NE line
+                {
+                    var vec_SW_NE =   { x: listOutP[iNE].x - listOutP[iSW].x , y: listOutP[iNE].y - listOutP[iSW].y };
+                    var vec_NE_newP = { x: newP.x          - listOutP[iNE].x , y: newP.y          - listOutP[iNE].y };
+                    var vec_Project_othog = SbtMath.ProjectAtoB( vec_NE_newP , vec_SW_NE );              
+                    XScale =   SbtMath.ProjectAtoBScale( vec_Project_othog , vec_X_DIR ) + 1;  // 
+                    YScale =  -SbtMath.ProjectAtoBScale( vec_Project_othog , vec_Y_DIR ) + 1;                   
+                    rot_cen = {x: rot_cen.x * XScale , y: rot_cen.y * YScale };
+                    var NE_moved_inner_coordinate = { x : privateBoxArea.Right * XScale  , y : privateBoxArea.Top * YScale };                      
+                    var NE_moved = this.ActiveShape.ConvertCoordinateToBase( NE_moved_inner_coordinate , rot_cen );
+                    var NE_should_go = { x: listOutP[iNE].x + vec_Project_othog.x , y: listOutP[iNE].y + vec_Project_othog.y };                 
+                    vecBoxMove = { x: NE_should_go.x - NE_moved.x , y: NE_should_go.y - NE_moved.y };              
+                }
+                break;
+
+            case ResizeEnum.SE:
+            // USE NW-SE line
+                {
+                    var vec_NW_SE =   { x: listOutP[iSE].x - listOutP[iNW].x , y: listOutP[iSE].y - listOutP[iNW].y };
+                    var vec_SE_newP = { x: newP.x          - listOutP[iSE].x , y: newP.y          - listOutP[iSE].y };
+                    var vec_Project_othog = SbtMath.ProjectAtoB( vec_SE_newP , vec_NW_SE );              
+                    XScale =   SbtMath.ProjectAtoBScale( vec_Project_othog , vec_X_DIR ) + 1;  // 
+                    YScale =   SbtMath.ProjectAtoBScale( vec_Project_othog , vec_Y_DIR ) + 1;                   
+                    rot_cen = {x: rot_cen.x * XScale , y: rot_cen.y * YScale };
+                    var SE_moved_inner_coordinate = { x : privateBoxArea.Right * XScale  , y : privateBoxArea.Bottom * YScale };                      
+                    var SE_moved = this.ActiveShape.ConvertCoordinateToBase( SE_moved_inner_coordinate , rot_cen );
+                    var SE_should_go = { x: listOutP[iSE].x + vec_Project_othog.x , y: listOutP[iSE].y + vec_Project_othog.y };                 
+                    vecBoxMove = { x: SE_should_go.x - SE_moved.x , y: SE_should_go.y - SE_moved.y };              
+                }
+                break;
+            case ResizeEnum.NW: 
+                {
+                    var vec_SE_NW =   { x: listOutP[iNW].x - listOutP[iSE].x , y: listOutP[iNW].y - listOutP[iSE].y };
+                    var vec_NW_newP = { x: newP.x          - listOutP[iNW].x , y: newP.y          - listOutP[iNW].y };
+                    var vec_Project_othog = SbtMath.ProjectAtoB( vec_NW_newP , vec_SE_NW );              
+                    XScale =  -SbtMath.ProjectAtoBScale( vec_Project_othog , vec_X_DIR ) + 1;  // 
+                    YScale =  -SbtMath.ProjectAtoBScale( vec_Project_othog , vec_Y_DIR ) + 1;                   
+                    rot_cen = {x: rot_cen.x * XScale , y: rot_cen.y * YScale };
+                    var NW_moved_inner_coordinate = { x : privateBoxArea.Left * XScale  , y : privateBoxArea.Top * YScale };                      
+                    var NW_moved = this.ActiveShape.ConvertCoordinateToBase( NW_moved_inner_coordinate , rot_cen );
+                    var NW_should_go = { x: listOutP[iNW].x + vec_Project_othog.x , y: listOutP[iNW].y + vec_Project_othog.y };                 
+                    vecBoxMove = { x: NW_should_go.x - NW_moved.x , y: NW_should_go.y - NW_moved.y };              
+                }
+                break;
+
+
+            case ResizeEnum.N: 
+                { 
+                    var vec_NW_newP = { x: newP.x - listOutP[iNW].x , y: newP.y - listOutP[iNW].y };
+                    var vec_Project_Y = SbtMath.ProjectAtoB( vec_NW_newP , vec_Y_DIR );  
+                    YScale =  -SbtMath.ProjectAtoBScale( vec_NW_newP , vec_Y_DIR ) + 1;                   
+                    rot_cen = {x: rot_cen.x , y: rot_cen.y * YScale};
+                    var NW_moved_inner_coordinate = { x : privateBoxArea.Left , y : privateBoxArea.Top * YScale };                      
+                    var NW_moved = this.ActiveShape.ConvertCoordinateToBase( NW_moved_inner_coordinate , rot_cen );
+                    var NW_should_go = { x: listOutP[iNW].x + vec_Project_Y.x , y: listOutP[iNW].y + vec_Project_Y.y };                 
+                    vecBoxMove = { x: NW_should_go.x - NW_moved.x , y: NW_should_go.y - NW_moved.y };              
+                }
+                break;
+
+            case ResizeEnum.S: 
+                { 
+                    var vec_SW_newP = { x: newP.x - listOutP[iSW].x , y: newP.y - listOutP[iSW].y };
+                    var vec_Project_Y = SbtMath.ProjectAtoB( vec_SW_newP , vec_Y_DIR );  
+                    YScale =  SbtMath.ProjectAtoBScale( vec_SW_newP , vec_Y_DIR ) + 1;                   
+                    var SW_moved_inner_coordinate = { x : privateBoxArea.Left , y : privateBoxArea.Bottom * YScale };                      
+                    rot_cen = {x: rot_cen.x , y: rot_cen.y * YScale};
+                    var SW_moved = this.ActiveShape.ConvertCoordinateToBase( SW_moved_inner_coordinate , rot_cen );
+                    var SW_should_go = { x: listOutP[iSW].x + vec_Project_Y.x , y: listOutP[iSW].y + vec_Project_Y.y };                 
+                    vecBoxMove = { x: SW_should_go.x - SW_moved.x , y: SW_should_go.y - SW_moved.y };  
+                }
+                break;
+
+
+            case ResizeEnum.E: 
+                { 
+                    var vec_NE_newP = { x: newP.x - listOutP[iNE].x , y: newP.y - listOutP[iNE].y };
+                    var vec_Project_X = SbtMath.ProjectAtoB( vec_NE_newP , vec_X_DIR );  
+                    XScale =  SbtMath.ProjectAtoBScale( vec_NE_newP , vec_X_DIR ) + 1;                   
+                    rot_cen = {x: rot_cen.x * XScale , y: rot_cen.y };
+                    var NE_moved_inner_coordinate = { x : privateBoxArea.Right * XScale , y : privateBoxArea.Top }; 
+                    var NE_moved = this.ActiveShape.ConvertCoordinateToBase( NE_moved_inner_coordinate , rot_cen );
+                    var NE_should_go = { x: listOutP[iNE].x + vec_Project_X.x , y: listOutP[iNE].y + vec_Project_X.y };                 
+                    vecBoxMove = { x: NE_should_go.x - NE_moved.x , y: NE_should_go.y - NE_moved.y };              
+                }
+                break;
+
+            case ResizeEnum.W: 
+                { 
+                    var vec_NW_newP = { x: newP.x - listOutP[iNW].x , y: newP.y - listOutP[iNW].y };
+                    var vec_Project_X = SbtMath.ProjectAtoB( vec_NW_newP , vec_X_DIR );  
+                    XScale = -SbtMath.ProjectAtoBScale( vec_NW_newP , vec_X_DIR ) + 1;                   
+                    rot_cen = {x: rot_cen.x * XScale , y: rot_cen.y };
+                    var NW_moved_inner_coordinate = { x : privateBoxArea.Left * XScale , y : privateBoxArea.Top }; 
+                    var NW_moved = this.ActiveShape.ConvertCoordinateToBase( NW_moved_inner_coordinate , rot_cen );
+                    var NW_should_go = { x: listOutP[iNW].x + vec_Project_X.x , y: listOutP[iNW].y + vec_Project_X.y };                 
+                    vecBoxMove = { x: NW_should_go.x - NW_moved.x , y: NW_should_go.y - NW_moved.y };               
+                }
+                break;
+        }
+
+        
+        var selectedShapeStates = MyShapesState.Public_GetAllSelectedShapeStates();
+        for (var i = 0; i < selectedShapeStates.length; i++)
+        {
+            if (  selectedShapeStates[i].SpringableState != null && selectedShapeStates[i].SpringableState.IsSpringable)
+            {
+                this.Private_ScaleAndMoveSpringable(selectedShapeStates[i], XScale, YScale, this.ResizeDirection);
+                selectedShapeStates[i].MoveDistance(vecBoxMove.x, vecBoxMove.y);
+            }
+            else
+            {
+                selectedShapeStates[i].ChangeScaleXY(XScale, YScale);
+                selectedShapeStates[i].MoveDistance(vecBoxMove.x, vecBoxMove.y);   
+            }
+            selectedShapeStates[i].UpdateDrawing(true);
+        }
+    }
+
+
+
+ 
+
+    this.Public_StopResizing = function ()
+    {
+        var undoArray = new Array();
+        var redoArray = new Array();
+
+
+        var selectedShapeStates = MyShapesState.Public_GetAllSelectedShapeStates();
+        for (var i = 0; i < selectedShapeStates.length; i++)
+        {
+            var shapeState = selectedShapeStates[i];
+            var undoItem = this.UndoLog[shapeState.Id];
+
+            if (undoItem == null || undoItem == undefined)
+                continue;
+
+            if (undoItem.IsSpringable)
+            {
+                undoArray.push({
+                    Id: shapeState.Id,
+                    Transforms: undoItem.Transforms,
+                    SvgSize: undoItem.SvgSize,
+                    MoveX: undoItem.MoveX,
+                    MoveY: undoItem.MoveY,
+                    UseClipping: undoItem.UseClipping,
+                    ClipHeight: undoItem.ClipHeight,
+                    ClipWidth: undoItem.ClipWidth,
+                    IsSpringable: true
+                });
+                redoArray.push({
+                    Id: shapeState.Id,
+                    Transforms: shapeState.SpringableState.GetSpringStateTransforms(),
+                    SvgSize: SvgCreator.GetSvgSize(shapeState.Id + "_svgImage"),
+                    UseClipping: shapeState.UseClipping,
+                    ClipHeight: shapeState.ClipHeight,
+                    ClipWidth: shapeState.ClipWidth,
+                    MoveX: shapeState.X,
+                    MoveY: shapeState.Y,
+                    IsSpringable: true
+                });
+            }
+            else
+            {
+                undoArray.push({ Id: shapeState.Id, ScaleX: undoItem.ScaleX, ScaleY: undoItem.ScaleY, MoveX: undoItem.MoveX, MoveY: undoItem.MoveY, IsSpringable: false });
+                redoArray.push({ Id: shapeState.Id, ScaleX: shapeState.ScaleX, ScaleY: shapeState.ScaleY, MoveX: shapeState.X, MoveY: shapeState.Y, IsSpringable: false });
+            }
+        }
+
+        UndoManager.register(undefined, UndoShapeResizeWithMove, undoArray, '', undefined, UndoShapeResizeWithMove, redoArray, '');
+
+    };
+
+    // this method shoudl be rewritten to use same logic as other resize method (or vice versa)!
+    this.ResizeViaPinch = function (pinchData)
+    {
+
+        var origin = this.UndoLog[this.ActiveShape.Id],
+            scale = 1,
+            r = this.ActiveShape.Angle / 57.2957795
+        ;
+        var angle = this.Private_SanitizeAngle(this.ActiveShape.Angle);
+
+
+        // Affine trasformation: rotation - for math, see: http://en.wikipedia.org/wiki/Transformation_matrix
+        var startOffsetTransform = {
+            'x': Math.abs(pinchData.startXOffset * Math.cos(r) + pinchData.startYOffset * Math.sin(r)),
+            'y': Math.abs(pinchData.startYOffset * Math.cos(r) - pinchData.startXOffset * Math.sin(r))
+        };
+        var currentOffsetTransform = {
+            'x': Math.abs(pinchData.currentXOffset * Math.cos(r) + pinchData.currentYOffset * Math.sin(r)),
+            'y': Math.abs(pinchData.currentYOffset * Math.cos(r) - pinchData.currentXOffset * Math.sin(r))
+        };
+
+        var deltaXTransform = currentOffsetTransform.x - startOffsetTransform.x;
+        var deltaYTransform = currentOffsetTransform.y - startOffsetTransform.y;
+        var deltaRatio = Math.min(deltaXTransform, deltaYTransform) / Math.max(deltaXTransform, deltaYTransform, 0.001);
+
+        var tolerance = 10, deltaRatioTolerance = 0.499;
+        var moveToX, moveToY;
+
+        var oldBB = this.ActiveShape.Public_GetVisibleShapeDimensions();
+
+        var useSprings = false;
+        // scale whole object
+        if (((deltaXTransform < tolerance) && (deltaYTransform < tolerance)) || ((deltaXTransform > tolerance) && (deltaYTransform > tolerance) && (deltaRatio > deltaRatioTolerance)))
+        {
+            scale = pinchData.scale;
+            moveToX = origin.MoveX - ((origin.Width * (scale - 1)) / 2);
+            moveToY = origin.MoveY - ((origin.Height * (scale - 1)) / 2);
+            this.ActiveShape.SetScale(scale * origin.ScaleX, scale * origin.ScaleY);
+            //DebugLine("XY: " + scale)
+        }
+        else
+        {
+            useSprings = this.ActiveShape.IsSpringable();
+
+            //scale x
+            if ((deltaYTransform < tolerance) || ((deltaXTransform > deltaYTransform) && (deltaRatio <= deltaRatioTolerance)))
+            {
+                scale = currentOffsetTransform.x / ((startOffsetTransform.x === 0) ? 1 : startOffsetTransform.x);
+                moveToX = origin.MoveX - ((origin.Width * (scale - 1)) / 2);
+                moveToY = origin.MoveY;
+                if (useSprings)
+                {
+
+                    var moveX = (this.ActiveShape.X - moveToX) * 2;
+
+                    var altScale = 1 + ((deltaXTransform / oldBB.width) / 10);  // divide scale by 10 to slow down the resizes... this is a short term fix!
+                    //DebugLine("X: " + scale + " alt scale: " + altScale)
+                    this.Private_ScaleAndMoveSpringable(this.ActiveShape, altScale, 1, this.Private_AnchorCorner("W", angle), "W");
+                }
+                else
+                    this.ActiveShape.SetScale(scale * origin.ScaleX, origin.ScaleY);
+            }
+
+            else//scale Y
+            {
+                scale = currentOffsetTransform.y / ((startOffsetTransform.y === 0) ? 1 : startOffsetTransform.y);
+                moveToX = origin.MoveX;
+                moveToY = origin.MoveY - ((origin.Height * (scale - 1)) / 2);
+                if (useSprings)
+                {
+
+                    var altScale = 1 + ((deltaYTransform / oldBB.height) / 10);
+                    //DebugLine("Y: " + scale + " : alt scale: " + altScale)
+
+                    this.Private_ScaleAndMoveSpringable(this.ActiveShape, 1, altScale, this.Private_AnchorCorner("N", angle), "N");
+                }
+                else
+                    this.ActiveShape.SetScale(origin.ScaleX, scale * origin.ScaleY);
+            }
+        }
+        //if(useSprings==false)
+        if ((moveToX < 0 && (moveToX - oldBB.width < 0)) || (moveToY < 0 && (moveToY - oldBB.height < 0)))
+        {
+            //DebugLine("UH OH: MoveToX: " + moveToX + " " + "Move to Y: " + moveToY)
+        }
+        else
+        {
+            this.ActiveShape.MoveTo(moveToX, moveToY);
+        }
+
+        this.ActiveShape.UpdateDrawing();
+
+        //var oldBB = this.ActiveShape.Public_GetVisibleShapeDimensions();
+        //DebugLine("Shape Size: " + oldBB.width + " : " + oldBB.height)
+    };
+
+
+    //#region Resize Helpers
+
+    this.Private_SanitizeAngle = function (angle)
+    {
+        angle %= 360;
+
+        if (angle < 0)
+            angle += 360;
+
+        if (angle % 90 === 0)
+        {
+            angle += 1;
+        }
+        angle %= 360;
+
+        return angle;
+    };
+
+    this.Private_AnchorCorner = function (direction, angle)
+    {
+
+        var corner = "";
+
+        switch (direction)
+        {
+            case ResizeEnum.N:
+            case ResizeEnum.NE:
+                {
+                    corner = "SW";
+                    if (angle >= 90 && angle < 180)
+                    {
+                        corner = "NW";
+                    }
+                    else if (angle >= 180 && angle < 270)
+                    {
+                        corner = "NE";
+                    }
+                    else if (angle >= 270)
+                    {
+                        corner = "SE";
+                    }
+                    break;
+                }
+
+            case ResizeEnum.S:
+            case ResizeEnum.SW:
+                {
+                    corner = "NE";
+                    if (angle >= 90 && angle < 180)
+                    {
+                        corner = "SE";
+                    }
+                    else if (angle >= 180 && angle < 270)
+                    {
+                        corner = "SW";
+                    }
+                    else if (angle >= 270)
+                    {
+                        corner = "NW";
+                    }
+                    break;
+                }
+
+
+            case ResizeEnum.E:
+            case ResizeEnum.SE:
+                {
+                    corner = "NW";
+                    if (angle >= 90 && angle < 180)
+                    {
+                        corner = "NE";
+                    }
+                    else if (angle >= 180 && angle < 270)
+                    {
+                        corner = "SE";
+                    }
+                    else if (angle >= 270)
+                    {
+                        corner = "SW";
+                    }
+                    break;
+                }
+
+            case ResizeEnum.W:
+            case ResizeEnum.NW:
+                {
+                    corner = "SE";
+                    if (angle >= 90 && angle < 180)
+                    {
+                        corner = "SW";
+                    }
+                    else if (angle >= 180 && angle < 270)
+                    {
+                        corner = "NW";
+                    }
+                    else if (angle >= 270)
+                    {
+                        corner = "NE";
+                    }
+                    break;
+                }
+
+                //case ResizeEnum.NE:
+                //    {  
+                //        corner = "SW";
+                //        if (angle >= 90 && angle < 180)
+                //        {
+                //            corner = "NW";
+                //        }
+                //        else if (angle >= 180 && angle < 270)
+                //        {
+                //            corner = "NE";
+                //        }
+                //        else if (angle >= 270)
+                //        {
+                //            corner = "SE";
+                //        }
+                //        break;
+                //    }
+        }
+
+        return corner;
+
+    };
+ 
+ 
+    this.Private_ScaleAndMoveSpringable = function (shapeState, scaleX, scaleY, resizeDirection)
+    { 
+        var oldBB = shapeState.Public_GetVisibleShapeDimensions();
+
+        var oldWidth = oldBB.width;
+        var oldHeight = oldBB.height;
+ 
+        var moveX = (scaleX - 1) * (oldWidth / shapeState.ScaleX);
+        var moveY = (scaleY - 1) * (oldHeight / shapeState.ScaleY);
+
+        var toMoveIdsH = shapeState.SpringableState.Anchors.Right;
+        var toSpringIdsH = shapeState.SpringableState.Springs.Horizontal;
+
+        var toMoveIdsV = shapeState.SpringableState.Anchors.Bottom;
+        var toSpringIdsV = shapeState.SpringableState.Springs.Vertical;
+
+        //don't let the boxes get too small!  this isn't perfect, but get's it close!
+        if (!this.Private_VerifySafeToScaleSpringable(shapeState, toSpringIdsH, scaleX, 1, moveX, 0))
+            return;
+        
+        if (!this.Private_VerifySafeToScaleSpringable(shapeState, toSpringIdsV, 1, scaleY, 0, moveY))
+            return;
+
+        if (shapeState.UseClipping)
+        {
+            shapeState.ClipWidth += moveX;
+            shapeState.ClipHeight += moveY;
+        }
+
+        for (var i = 0; i < toMoveIdsH.length; i++)
+        { 
+            var transform = SvgCreator.GetTransform(toMoveIdsH[i]);
+            var hdivisor = toMoveIdsH[i].indexOf('-hhalf') > 0 ? 2 : 1;
+
+            transform.Translate[0] += moveX / hdivisor;
+            SvgCreator.WriteTransform(toMoveIdsH[i], transform);
+        }
+
+        for (var i = 0; i < toMoveIdsV.length; i++)
+        { 
+            var transform = SvgCreator.GetTransform(toMoveIdsV[i]);
+            var vdivisor = toMoveIdsV[i].indexOf('-vhalf') > 0 ? 2 : 1;
+            transform.Translate[1] += moveY / vdivisor;
+            SvgCreator.WriteTransform(toMoveIdsV[i], transform);
+        }
+
+
+        for (var i = 0; i < toSpringIdsH.length; i++)
+        {
+            var spring = GetGlobalById(toSpringIdsH[i]); 
+            var transform = SvgCreator.GetTransform(toSpringIdsH[i]);
+            var bBox = spring.getBBox();
+
+            var newScaleX = moveX / bBox.width; 
+
+            newScaleX = isNaN(newScaleX) ? 0 : newScaleX; 
+
+            transform.Scale[0] += newScaleX; 
+
+            if (transform.Scale[0] < 0 )
+            {
+                continue;
+            }
+
+            if (newScaleX != 0)
+                transform.Translate[0] = (1 - transform.Scale[0]) * bBox.x; 
+
+            SvgCreator.WriteTransform(toSpringIdsH[i], transform);
+        }
+
+        for (var i = 0; i < toSpringIdsV.length; i++)
+        {
+            var spring = GetGlobalById(toSpringIdsV[i]); 
+            var transform = SvgCreator.GetTransform(toSpringIdsV[i]);
+            var bBox = spring.getBBox(); 
+            var newScaleY = moveY / bBox.height;
+ 
+            newScaleY = isNaN(newScaleY) ? 0 : newScaleY;
+ 
+            transform.Scale[1] += newScaleY;
+
+            if (  transform.Scale[1] < 0)
+            {
+                continue;
+            }
+
+            if (newScaleY != 0)
+                transform.Translate[1] = (1 - transform.Scale[1]) * bBox.y; 
+
+            SvgCreator.WriteTransform(toSpringIdsV[i], transform);
+        }
+
+        SvgCreator.UpdateSvgSize_WithDeltas(shapeState.Id + "_svgImage", moveX, moveY); 
+          
+    };
+
+    this.UndoSpringableResize = function (undoState)
+    {
+        SvgCreator.UpdateSvgSize(undoState.Id + "_svgImage", undoState.SvgSize)
+
+        for (var i = 0; i < undoState.Transforms.length; i++)
+        {
+            SvgCreator.WriteTransform(undoState.Transforms[i].Id, undoState.Transforms[i].Transform);
+        }
+    };
+
+    this.Private_VerifySafeToScaleSpringable = function (shapeState, toSpringIds, scaleX, scaleY, moveX, moveY)
+    {
+        if (scaleX < 0 || scaleY < 0)
+            return false;
+
+        for (var i = 0; i < toSpringIds.length; i++)
+        {
+            var spring = GetGlobalById(toSpringIds[i]);
+            //var bBox = spring.getBoundingClientRect();
+
+            var transform = SvgCreator.GetTransform(toSpringIds[i]);
+            var bBox = spring.getBBox();
+
+            var newScaleX = moveX / bBox.width;
+            var newScaleY = moveY / bBox.height;
+
+            newScaleX = isNaN(newScaleX) ? 0 : newScaleX;
+            newScaleY = isNaN(newScaleY) ? 0 : newScaleY;
+
+            newScaleX = transform.Scale[0] += newScaleX;
+            newScaleY = transform.Scale[1] += newScaleY;
+
+            if (scaleX < 1 && ((newScaleX * bBox.width * shapeState.ScaleX) < 10))
+                return false;
+
+            if (scaleY < 1 && ((newScaleY * bBox.height * shapeState.ScaleY) < 10))
+                return false;
+        }
+ 
+        var coreImage = GetGlobalById( shapeState.Id + "_svgImage" );
+ 
+        if (moveX < 0 || moveY < 0)
+        {
+            console.log( parseInt(coreImage.getAttribute("width") , 10) );
+            if ( parseInt(coreImage.getAttribute("width") , 10) + moveX < 10)
+                return false;
+
+            if ( parseInt(coreImage.getAttribute("height") , 10) + moveY < 10)
+                return false;
+        }
+
+
+
+        return true;
+    };
+
+    this.Private_ScaleAndMove = function (shapeState, scaleX, scaleY, corner)
+    { 
+        var oldBB = this.ActiveShape.Public_GetVisibleShapeDimensions();
+        var oldWidth = oldBB.width;
+        var oldHeight = oldBB.height;
+
+        if (scaleX != 1 && (scaleX * oldWidth) < 10)
+            return;
+
+        if (scaleY != 1 && (scaleY * oldHeight) < 10)
+            return;
+
+        var moveX = 0;
+        var moveY = 0;
+        var oldImaginaryBox = shapeState.Public_GetImaginaryOuterBox();
+        shapeState.ChangeScaleXY(scaleX, scaleY);
+         var newImaginaryBox = shapeState.Public_GetImaginaryOuterBox();
+
+        switch (corner)
+        {
+            case "SW":
+                {
+                    moveY = (oldImaginaryBox.Bottom - newImaginaryBox.Bottom);
+                    moveX = (oldImaginaryBox.Left - newImaginaryBox.Left);
+                    break;
+                }
+            case "NW":
+                {
+                    moveY = (oldImaginaryBox.Top - newImaginaryBox.Top);
+                    moveX = (oldImaginaryBox.Left - newImaginaryBox.Left);
+                    break;
+                }
+            case "NE":
+                {
+                    moveY = (oldImaginaryBox.Top - newImaginaryBox.Top);
+                    moveX = (oldImaginaryBox.Right - newImaginaryBox.Right);
+                    break;
+                }
+            case "SE":
+                {
+                    moveY = (oldImaginaryBox.Bottom - newImaginaryBox.Bottom);
+                    moveX = (oldImaginaryBox.Right - newImaginaryBox.Right);
+                    break;
+                }
+        }
+
+        shapeState.MoveDistance(moveX, moveY);
+        shapeState.UpdateDrawing();
+    };
+ 
+}

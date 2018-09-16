@@ -1,0 +1,1050 @@
+﻿/// <reference path="SvgManip.js" />
+
+function StoryboardContainerLibrary()
+{
+    this.Private_TitleGroup = "TitleGroup";
+    this.Private_DescriptionGroup = "DescriptionGroup";
+    this.Private_AttributionGroup = "ImageAttributionGroup";
+    this.Private_StoryboardTitlesGroup = "StoryboardTitlesGroup";
+    this.Private_StoryboardLayoutLinesGroup = "StoryboardLayoutLinesGroup";
+
+    this.Private_LayoutType = "Sbt-Layout-Type";
+
+    this.Rows = 1;
+    this.Cols = 3;
+
+    this.MaxCols = 6;
+    this.MaxRows = 4;
+
+    this.CoreSvgLeft;
+    this.CoreSvgTop;
+    this.CoreSvgRight;
+    this.CoreSvgBottom;
+
+    this.SvgContainerPositionTop;
+    this.SvgContainerPositionLeft;
+
+    this.SvgContainerOffsetTop;
+    this.SvgContainerOffsetLeft;
+
+
+    this.IsFreeLayoutConfiguration = function (rows, cols)
+    {
+        try
+        {
+            if (cols != 3)
+                return false;
+
+            if (rows > 2)
+                return false;
+
+            if (StoryboardContainer.GetLayoutType() != StoryboardLayoutType.StoryboardGrid)
+                return false;
+
+            return true;
+        }
+        catch (e)
+        {
+            LogErrorMessage("SvgManip.IsFreeLayoutConfiguration", e);
+        }
+    };
+
+    this.GetLayoutType = function ()
+    {
+        var layoutType = MyPointers.CoreSvg.attr(this.Private_LayoutType);
+        if (layoutType == null)
+            return StoryboardLayoutType.StoryboardGrid;
+
+        return layoutType;
+    };
+
+    this.SetLayoutType = function ()
+    {
+        MyPointers.CoreSvg.attr(this.Private_LayoutType, CellConfiguration.LayoutType);
+    };
+
+    this.Initialize = function ()
+    {
+        this.JiggleSvgSize();
+        this.SetCoreSvgDimensions();
+    };
+
+    this.JiggleSvgSize = function ()
+    {
+        var outerDivPadding = 5;
+
+        var windowWidth = MyPointers.Tabs.width();
+
+        var jqWindow = $(window);
+
+        var windowHeight = jqWindow.height() - (MyPointers.Tabs.outerHeight() + MyPointers.BottomControls.outerHeight());
+
+        var coreSvgClientRect = GetGlobalById("CoreSvg").getBoundingClientRect();
+        var svgWidth = (coreSvgClientRect.width - 2) + (2 * outerDivPadding);
+        var svgHeight = (coreSvgClientRect.height - 2) + (2 * outerDivPadding);
+
+        if (svgWidth < windowWidth && svgHeight < windowHeight)
+        {
+            MyPointers.SvgContainer.css("overflow", "");
+        }
+        else
+        {
+            MyPointers.SvgContainer.css("overflow", "auto");
+        }
+
+        var marginTop = MyPointers.Tabs.height();
+
+        MyPointers.SvgContainer.css("width", windowWidth + "px");
+        MyPointers.SvgContainer.css("width", '100%');
+        MyPointers.SvgContainer.css("height", windowHeight + "px");
+        //MyPointers.SvgContainer.css("height", "100%");
+        MyPointers.SvgContainer.css("margin-top", marginTop + "px");
+
+        //this MOVES the core svg, without this line, jiggle fails!
+        MyPointers.CoreSvg.css("margin", "5px");
+
+        if (svgHeight < windowHeight)
+        {
+            // have to use StoryboardContainer.Private_GetScrollBarWidth() vs this. due to calling this via a timeout...  also seems like poor understanding of JS...
+            MyPointers.CoreSvg.css("margin", ((windowHeight - StoryboardContainer.Private_GetScrollBarWidth() - svgHeight) / 2) + "px 5px");
+        }
+    };
+
+    this.UpdateBackgroundColors = function ()
+    {
+        //reset colors for old storyboards...
+        MyPointers.CoreSvg.css("border", "1px solid #808080;");
+        MyPointers.CoreSvg.css("background-color", "#edeef1;");
+        MyPointers.CoreSvg.css("margin", "5px");
+
+        //MyPointers.CoreSvg.css("background-color", "pink");
+    };
+
+    //#region "Gradients and Filters"
+    this.RemoveFilters = function ()
+    {
+        //http://caniuse.com/svg-filters - this is what causes safari files to be corrupted
+        if (MyBrowserProperties.IsSafari5)
+        {
+            $("filter").remove();
+        }
+
+        $("inkscape\\:perspective").remove();
+        $("inkscape\\:path-effect").remove();
+        $("rdf\\:rdf").remove();
+        $("metadata").remove();
+
+        var inkscapeHrefs = $("[inkscape\\:xlink\\:href]");
+        inkscapeHrefs.removeAttr("inkscape:xlink:href");
+    };
+
+    this.UpdateGradientIds = function (node)
+    {
+        var childrenIds = new Array();
+
+        RecursivelyFindGradientChildrenIds(node, childrenIds);
+
+        for (var i = 0; i < childrenIds.length; i++)
+        {
+            var oldId = childrenIds[i];
+            var newId = oldId;
+            if (newId.indexOf("_ix_") > 0)
+            {
+                newId = newId.substring(0, newId.indexOf("_ix_"));
+            }
+            newId = newId + "_ix_" + new Date().getTime() + "_" + i;
+            RecursivelyUpdateChildrenIds(node, oldId, newId);
+        }
+    }
+    //#endregion
+
+    //#region "Layouts"
+
+    this.GetShapeStatesForCell = function (row, col)
+    {
+        var shapeStatesAndParts = new Object();
+        shapeStatesAndParts[StoryboardPartTypeEnum.StoryboardCell] = new Array();
+        shapeStatesAndParts[StoryboardPartTypeEnum.StoryboardCellTitle] = new Array();
+        shapeStatesAndParts[StoryboardPartTypeEnum.StoryboardCellDescription] = new Array();
+
+
+        var layoutParts = this.GetAllLayoutParts(CellConfiguration);
+        var shapeStates = MyShapesState.Public_GetAllMovableShapeStates(false);
+
+        for (var i = 0; i < shapeStates.length; i++)
+        {
+            var shapeState = shapeStates[i];
+            var shapeLocation = this._GetLayoutPartForShape(layoutParts, shapeState);
+
+            //use the null's if we ever want items *NOT IN* a cell
+            if (shapeLocation != null)
+            {
+                if (shapeLocation.StoryboardPartType == StoryboardPartTypeEnum.StoryboardAreaTitle)     //don't move items in area titles
+                    continue;
+
+                if (shapeLocation.StoryboardPartType == StoryboardPartTypeEnum.StoryboardAttributionArea)     //don't move items in attribution area
+                    continue;
+
+                if (shapeLocation.Col == col && shapeLocation.Row == row)
+                {
+                    shapeStatesAndParts[shapeLocation.StoryboardPartType].push(shapeState);
+                }
+            }
+        }
+
+        return shapeStatesAndParts;
+    };
+
+    this.Public_ChangeCellOrder = function (reorderList)
+    {
+        var layoutParts = this.GetAllLayoutParts(CellConfiguration);
+        var shapeStates = MyShapesState.Public_GetAllMovableShapeStates(false);
+
+        for (var i = 0; i < shapeStates.length; i++)
+        {
+            var shapeState = shapeStates[i];
+            var shapeLocation = this._GetLayoutPartForShape(layoutParts, shapeState);
+            if (shapeLocation != null)
+            {
+                if (shapeLocation.StoryboardPartType == StoryboardPartTypeEnum.StoryboardAreaTitle)     //don't move items in area titles
+                    continue;
+
+                //ugly way to do this.. abs 1/28/15
+                for (var j = 0; j < reorderList.length; j++)
+                {
+                    var cellOrder = reorderList[j];
+                    if (cellOrder.oldCol == shapeLocation.Col && cellOrder.oldRow == shapeLocation.Row)
+                    {
+                        var newShapeLocation = CellConfiguration.GetCellPartPosition(shapeLocation.StoryboardPartType, cellOrder.newRow, cellOrder.newCol);
+                        shapeState.Public_ChangeShapeLocation(shapeLocation, newShapeLocation);
+
+                        break;
+                    }
+                }
+
+            }
+        }
+    };
+
+    this.ChangeCellConfiguration_MoveShapes = function (oldCellConfiguration, newCellConfiguration)
+    {
+        var layoutParts = this.GetAllLayoutParts(oldCellConfiguration);
+        var shapeStates = MyShapesState.Public_GetAllMovableShapeStates(false);
+
+        for (var i = 0; i < shapeStates.length; i++)
+        {
+            var shapeState = shapeStates[i];
+            var shapeLocation = this._GetLayoutPartForShape(layoutParts, shapeState);
+
+            
+            if (shapeLocation != null)
+            {
+                var newShapeLocation = newCellConfiguration.GetCellPartPosition(shapeLocation.StoryboardPartType, shapeLocation.Row, shapeLocation.Col);
+                shapeState.Public_ChangeShapeLocation(shapeLocation, newShapeLocation);
+            }
+        }
+    };
+
+    this.ChangeCellConfiguration_ScaleShapes = function (oldCellConfiguration, newCellConfiguration, scaleAmount)
+    {
+        var layoutParts = this.GetAllLayoutParts(oldCellConfiguration);
+        var shapeStates = MyShapesState.Public_GetAllMovableShapeStates(false);
+
+        for (var i = 0; i < shapeStates.length; i++)
+        {
+            var shapeState = shapeStates[i];
+            var shapeLocation = this._GetLayoutPartForShape(layoutParts, shapeState);
+            if (shapeLocation != null)
+            {
+                var newShapeLocation = newCellConfiguration.GetCellPartPosition(shapeLocation.StoryboardPartType, shapeLocation.Row, shapeLocation.Col);
+                shapeState.Public_HandleCellExpansion(scaleAmount, shapeLocation, newShapeLocation);
+            }
+            else
+                shapeState.Public_HandleCellExpansion(scaleAmount, null, null);
+        }
+    };
+
+    this._GetLayoutPartForShape = function (layoutParts, shapeState)
+    {
+        try
+        {
+            var areaBox = shapeState.Public_GetImaginaryOuterBox();
+            var x = (areaBox.Left + areaBox.Right) / 2;
+            var y = (areaBox.Top + areaBox.Bottom) / 2;
+
+            for (var i = 0; i < layoutParts.length; i++)
+            {
+                var boxPosition = layoutParts[i];
+                if (x >= boxPosition.X && x < (boxPosition.X + boxPosition.Width))
+                {
+                    if (y >= boxPosition.Y && y < (boxPosition.Y + boxPosition.Height))
+                    {
+                        return boxPosition;
+                    }
+                }
+            }
+        } catch (e)
+        {
+            LogErrorMessage("StoryboardContainerLibrary._GetLayoutPartForShape", e);
+        }
+        return null;
+    };
+    //#endregion
+
+
+    this.CleanupAndVerifyLoadedSvg = function ()
+    {
+        var alreadyUpdated = $("#" + MyIdGenerator.GenerateCellId(0, 0));
+        if (alreadyUpdated.length == 0)
+        {
+            this.Private_UpdateOldCellIds();
+            this.Private_MoveAllArtUp();
+        }
+    };
+
+    this.CalculateRowsAndCols = function ()
+    {
+        this.Rows = 1;
+        this.Cols = 1;
+
+        for (var col = 1; col < 100; col++)
+        {
+            var cell = $("#" + MyIdGenerator.GenerateCellId(0, col));
+            if (cell.length > 0)
+                this.Cols = col + 1;
+            else
+                break;
+        }
+
+        for (var row = 1; row < 100; row++)
+        {
+            var cell = $("#" + MyIdGenerator.GenerateCellId(row, 0));
+            if (cell.length > 0)
+                this.Rows = row + 1;
+            else
+                break;
+        }
+
+        // hmm am I going to regret this loop?
+        while (this.Rows > StoryboardContainer.MaxRows)
+        {
+            AddExtraLayoutCells(true, false);
+        }
+
+        while (this.Cols > StoryboardContainer.MaxCols)
+        {
+            AddExtraLayoutCells(false, true);
+        }
+        
+    };
+
+    this.SetCoreSvgDimensions = function ()
+    {
+        var coreSvgClientRect = GetGlobalById("CoreSvg").getBoundingClientRect();
+        var svgWidth = (coreSvgClientRect.width - 2);
+        var svgHeight = (coreSvgClientRect.height - 2);
+
+        this.CoreSvgLeft = coreSvgClientRect.left;
+        this.CoreSvgTop = coreSvgClientRect.top;
+
+        if (this.CoreSvgLeft < 0 || svgWidth > MyPointers.SvgContainer.width())
+            this.CoreSvgLeft = 5;
+
+        if (this.CoreSvgTop < 0 || svgHeight > MyPointers.SvgContainer.height())
+            this.CoreSvgTop = MyPointers.Tabs.height() + 5;
+
+
+        this.CoreSvgRight = svgWidth + this.CoreSvgLeft;
+        this.CoreSvgBottom = svgHeight + this.CoreSvgTop;
+
+        var svgContainerPosition = MyPointers.SvgContainer.position();
+        this.SvgContainerPositionTop = svgContainerPosition.top;
+        this.SvgContainerPositionLeft = svgContainerPosition.left;
+
+
+        var svgContainerOffset = MyPointers.SvgContainer.offset();
+        this.SvgContainerOffsetTop = svgContainerOffset.top;
+        this.SvgContainerOffsetLeft = svgContainerOffset.left;
+    };
+
+    this.DetermineBackDropCords = function (shape, x, y)
+    {
+        x = ((x > 0) ? x : 0);
+        y = ((y > 0) ? y : 0);
+
+        var desiredWidth = CellConfiguration.CellWidth - (CellConfiguration.BackGroundOffsetX * 2);
+        var desiredHeight = CellConfiguration.CellHeight - (CellConfiguration.BackGroundOffsetY * 2);
+
+
+        var cells = $("[id^=cell_]");
+        var newX, newY;
+
+        for (var i = 0; i < cells.length; i++)
+        {
+            var cell = $(cells[i]);
+
+            cellX = parseFloat(cell.attr("x"));
+            cellY = parseFloat(cell.attr("y"));
+            cellWidth = parseFloat(cell.attr("width"));
+            cellHeight = parseFloat(cell.attr("height"));
+
+            if (x >= cellX && x <= (cellWidth + cellX))
+            {
+                if (y >= cellY && y <= (cellHeight + cellY))
+                {
+                    newX = cellX;
+                    newY = cellY;
+                }
+            }
+        }
+        if (newX == null)
+            return null;
+
+        // YOU NEED to use the passed in x,y since the shape's x/y is the "centered" x/y coords which may be a different row/column as things are getting settled
+
+        var outerbox = shape.Public_GetImaginaryOuterBox();
+
+        var curH = outerbox.Bottom-outerbox.Top;
+        var curW = outerbox.Right-outerbox.Left;
+
+        var ratio ; 
+        var xScale ; 
+        var yScale ; 
+
+        if( shape.Angle > 0 )
+        {
+            ratio = Math.min( desiredWidth / curW , desiredHeight / curH ) ;
+            xScale = ratio * shape.ScaleX;
+            yScale = ratio * shape.ScaleY;
+        } else {
+            xScale = desiredWidth / curW * shape.ScaleX;
+            yScale = desiredHeight / curH * shape.ScaleY;
+        }
+
+        // change scaleX previously and run outer function
+        shape.ScaleX = xScale;
+        shape.ScaleY = yScale;
+        var outerbox = shape.Public_GetImaginaryOuterBox();
+        var deltaX = newX - outerbox.Left;
+        var deltaY = newY - outerbox.Top;
+ 
+        moveAndScale = new MoveAndScale();
+
+        moveAndScale.MoveToX = shape.X + deltaX;
+        moveAndScale.MoveToY = shape.Y + deltaY;
+        moveAndScale.ScaleX = xScale;
+        moveAndScale.ScaleY = yScale;
+
+        return moveAndScale;
+    };
+
+    this.DetermineBackDropCords_Proportional = function (shape, x, y)
+    {
+        x = ((x > 0) ? x : 0);
+        y = ((y > 0) ? y : 0);
+
+        var desiredWidth = CellConfiguration.CellWidth - (CellConfiguration.BackGroundOffsetX * 2);
+        var desiredHeight = CellConfiguration.CellHeight - (CellConfiguration.BackGroundOffsetY * 2);
+
+
+        var cells = $("[id^=cell_]");
+        var newX, newY;
+
+        for (var i = 0; i < cells.length; i++)
+        {
+            var cell = $(cells[i]);
+
+            cellX = parseFloat(cell.attr("x"));
+            cellY = parseFloat(cell.attr("y"));
+            cellWidth = parseFloat(cell.attr("width"));
+            cellHeight = parseFloat(cell.attr("height"));
+
+            if (x >= cellX && x <= (cellWidth + cellX))
+            {
+                if (y >= cellY && y <= (cellHeight + cellY))
+                {
+                    newX = cellX;
+                    newY = cellY;
+                }
+            }
+        }
+        if (newX == null)
+            return null;
+
+        // YOU NEED to use the passed in x,y since the shape's x/y is the "centered" x/y coords which may be a different row/column as things are getting settled
+
+        // YOU NEED to use the passed in x,y since the shape's x/y is the "centered" x/y coords which may be a different row/column as things are getting settled
+
+        var outerbox = shape.Public_GetImaginaryOuterBox();
+
+        var curH = outerbox.Bottom-outerbox.Top;
+        var curW = outerbox.Right-outerbox.Left;
+
+        var ratio = Math.min( desiredWidth / curW , desiredHeight / curH ) ;
+        var xScale = ratio * shape.ScaleX;
+        var yScale = ratio * shape.ScaleY;
+
+        // change scaleX previously and run outer function
+        shape.ScaleX = xScale;
+        shape.ScaleY = yScale;
+        var outerbox = shape.Public_GetImaginaryOuterBox();
+        var deltaX = newX - outerbox.Left;
+        var deltaY = newY - outerbox.Top;
+ 
+        moveAndScale = new MoveAndScale();
+
+        moveAndScale.MoveToX = shape.X + deltaX;
+        moveAndScale.MoveToY = shape.Y + deltaY;
+        moveAndScale.ScaleX = xScale;
+        moveAndScale.ScaleY = yScale;
+
+        return moveAndScale;
+    };
+
+    this.CreateRowsAndCells = function (rows, cols)
+    {
+        this.Private_RemoveOutOfBoundsContent(rows, cols);
+        this.Private_RemoveOldCellsAndRows(rows, cols);
+
+        this.Private_AddRowsAndCells(rows, cols);
+
+        this.Rows = rows;
+        this.Cols = cols;
+
+        this.Private_RefreshStoryboardContainer();
+
+
+
+        // JIRA-WEB-33 - Clear the UR stack for this operation that cannot be undone
+        UndoManager.clear();
+    };
+
+    this.Private_ClearCells = function ()
+    {
+        MyPointers.CellContainer.children("rect").remove();
+        $("#" + this.Private_TitleGroup).remove();
+        $("#" + this.Private_DescriptionGroup).remove();
+
+        this.ClearStoryboardTitlesAndLines();
+    };
+
+    this.Public_ResetLayout = function ()
+    {
+        this.Private_ClearCells();
+        this.Private_AddRowsAndCells(this.Rows, this.Cols);
+
+        this.Private_RefreshStoryboardContainer();
+
+    };
+    this.ChangeCellCellLayout = function ()
+    {
+        this.Public_ResetLayout();
+        this.Private_RemoveOutOfBoundsContent(this.Rows, this.Cols);        // IF YOU have images in description boxes you can lose them! abs 1/16/15
+    };
+
+    this.ExpandCells = function (amount, redraw)
+    {
+        this.Private_ClearCells();
+        this.Private_AddRowsAndCells(this.Rows, this.Cols);
+
+        if (redraw !== false) {
+            this.Private_RefreshStoryboardContainer();
+        }
+    };
+
+    this.Private_RefreshStoryboardContainer = function (redrawLines)
+    {
+        this.Private_MoveWatermarkText(this.Rows, this.Cols);
+        this.Private_UpdateStoryboardFrame();
+        if (redrawLines !== false) {
+            this.Private_DrawLayoutLines(this.Rows, this.Cols);
+        }
+
+        this.JiggleSvgSize();
+        this.SetCoreSvgDimensions();
+    };
+
+
+
+    /*Privates*/
+
+    this.Private_DrawLayoutLines = function (rows, cols)
+    {
+        var appendTo = this.Private_GetAreaGroup(this.Private_StoryboardLayoutLinesGroup);
+
+        appendTo.append(CellConfiguration.GetLayoutLines(rows, cols));
+
+    };
+
+    this.Private_MoveWatermarkText = function ()
+    {
+        //var y = CellConfiguration.Row1PaddingTop + CellConfiguration.WatermarkPaddingTop + (this.Rows * CellConfiguration.FullRowHeight()) - CellConfiguration.BetweenRowPadding;
+        var y = CellConfiguration.GetWatermarkTop(this.Rows);
+        MyPointers.Watermark.attr("y", y);
+    };
+
+    this.Private_UpdateStoryboardFrame = function ()
+    {
+        var storyboardSize = CellConfiguration.GetStoryboardSize(this.Rows, this.Cols);
+
+        MyPointers.CoreSvg.attr("height", storyboardSize.Height);
+        MyPointers.CoreSvg.attr("width", storyboardSize.Width);
+    };
+
+    this.UpdateImageAttributions = function ()
+    {
+        var attributionText = "";
+        var imageAttributions = MyShapesState.Public_GetImageAttributions();
+
+        for (var key in imageAttributions)
+        {
+            if (imageAttributions.hasOwnProperty(key))
+            {
+                //DebugLine(key + " -> " + imageAttributions[key].Title);
+                attributionText += imageAttributions[key].Title + " (" + imageAttributions[key].ImageUrl + ") - " + imageAttributions[key].Author + " - " + MyLangMap.GetText("Text-Image-Attributions-License") + " " + imageAttributions[key].License + "\r\n";
+            }
+        }
+
+        var attributionAppendArea = this.Private_GetAreaGroup(this.Private_AttributionGroup);
+        attributionAppendArea.children().remove();
+
+        if (attributionText.length > 0)
+        {
+            SbtSummerNoteHelper.ResetToDefaults();
+
+            attributionText = MyLangMap.GetText("Text-Image-Attributions-Section") + "\r\n" + attributionText;
+
+            var attributionArea = new AttributionArea(8);
+
+            this.Private_AddTextable(MyIdGenerator.GenerateAttibutionAreaId(), this.Rows, this.Cols, attributionArea, attributionAppendArea, attributionText);
+
+            //if (UseQuill)
+            //    SbtQuillHelper.ResetToDefaults();
+
+            if (UseSummerNote)
+                SbtSummerNoteHelper.ResetToDefaults();
+        }
+        this.Private_RefreshStoryboardContainer(false);
+
+        
+    };
+
+
+    this.GetAllLayoutParts = function (storyboardLayout)
+    {
+        var layoutParts = [];
+        for (var row = 0; row < this.Rows; row++)
+        {
+            for (var col = 0; col < this.Cols; col++)
+            {
+                var position = storyboardLayout.GetCellPartPosition(StoryboardPartTypeEnum.StoryboardCell, row, col);
+                position.StoryboardPartType = StoryboardPartTypeEnum.StoryboardCell;
+                position.Row = row;
+                position.Col = col;
+                layoutParts.push(position);
+
+                if (storyboardLayout.HasTitle)
+                {
+                    position = storyboardLayout.GetCellPartPosition(StoryboardPartTypeEnum.StoryboardCellTitle, row, col);
+                    position.StoryboardPartType = StoryboardPartTypeEnum.StoryboardCellTitle;
+                    position.Row = row;
+                    position.Col = col;
+                    layoutParts.push(position);
+                }
+
+                if (storyboardLayout.HasDescription)
+                {
+                    position = storyboardLayout.GetCellPartPosition(StoryboardPartTypeEnum.StoryboardCellDescription, row, col);
+                    position.StoryboardPartType = StoryboardPartTypeEnum.StoryboardCellDescription;
+                    position.Row = row;
+                    position.Col = col;
+                    layoutParts.push(position);
+                }
+
+                // we skip the second 0,0 for matrix layouts... i think that is ok
+                position = storyboardLayout.GetCellPartPosition(StoryboardPartTypeEnum.StoryboardAreaTitle, row, col);
+                if (position == null)
+                    continue;
+                position.StoryboardPartType = StoryboardPartTypeEnum.StoryboardAreaTitle;
+                position.Row = row;
+                position.Col = col;
+
+                layoutParts.push(position);
+
+            }
+        }
+
+        //position = storyboardLayout.GetCellPartPosition(StoryboardPartTypeEnum.StoryboardAreaTitle, -1, -1);
+
+        //var storyboardTitlesCount = storyboardLayout.GetStoryboardAreaTitlesCount(this.Rows, this.Cols);
+        //for (var i = 0; i < storyboardTitlesCount; i++)
+        //{
+        //    position = storyboardLayout.GetCellPartPosition(StoryboardPartTypeEnum.StoryboardAreaTitle, i, 0);
+        //    position.StoryboardPartType = StoryboardPartTypeEnum.StoryboardAreaTitle;
+        //    position.Row = i;
+        //    position.Col = 0;
+
+        //    layoutParts.push(position);
+        //}
+
+        return layoutParts;
+
+    };
+
+
+
+    this.Private_AddRowsAndCells = function (rows, cols)
+    {
+        SbtSummerNoteHelper.ResetToDefaults();
+
+        for (var r = 0; r < rows; r++)
+        {
+            for (var c = 0; c < cols; c++)
+            {
+                var cell = $("#" + MyIdGenerator.GenerateCellId(r, c));
+                if (cell.length == 0)
+                {
+                    this.Private_CreateCell(r, c);
+                }
+
+                // add any area titles
+                this.Private_AddTextable(MyIdGenerator.GenerateStoryboardTitleId(r, c), r, c, CellConfiguration.GetStoryboardAreaTitleLayout(r, c), this.Private_GetAreaGroup(this.Private_StoryboardTitlesGroup));
+            }
+        }
+
+        //cheesy, but an extra 0,0 for matrix layouts.  Will probably have to continue to re-think
+        this.Private_AddTextable(MyIdGenerator.GenerateStoryboardTitleId(-1, -1), -1, -1, CellConfiguration.GetStoryboardAreaTitleLayout(-1, -1), this.Private_GetAreaGroup(this.Private_StoryboardTitlesGroup));
+
+    };
+
+    this.Private_RemoveOldCellsAndRows = function (rows, cols)
+    {
+        // remove extra rows
+        for (var row = this.Rows - 1; row >= rows; row--)
+        {
+            for (var col = 0; col < this.Cols; col++)
+            {
+                this.Private_RemoveCellAndTitleBlocks(row, col);
+            }
+        }
+
+        //remove extra cols
+        for (var row = 0; row < rows; row++)
+        {
+            for (var col = this.Cols - 1; col >= cols; col--)
+            {
+                this.Private_RemoveCellAndTitleBlocks(row, col);
+            }
+        }
+
+        this.ClearStoryboardTitlesAndLines();
+    };
+
+    this.ClearStoryboardTitlesAndLines = function ()
+    {
+        this.Private_GetAreaGroup(this.Private_StoryboardLayoutLinesGroup).remove();
+        this.Private_GetAreaGroup(this.Private_StoryboardTitlesGroup).remove();
+    };
+
+    this.Private_RemoveCellAndTitleBlocks = function (row, col)
+    {
+        var cell = $("#" + MyIdGenerator.GenerateCellId(row, col));
+        var titleCell = $("#" + MyIdGenerator.GenerateTitleCellId(row, col));
+        var descriptionCell = $("#" + MyIdGenerator.GenerateDescriptionCellId(row, col));
+
+        if (cell.length > 0)
+            cell.remove();
+
+        if (titleCell.length > 0)
+            titleCell.remove();
+
+        if (descriptionCell.length > 0)
+            descriptionCell.remove();
+    };
+
+    //this.Private_RemoveStoryboardTitleBlock=function(index)
+    //{
+    //    var title = $("#" + MyIdGenerator.GenerateStoryboardTitleId(index));
+
+    //    if (title.length > 0)
+    //        title.remove();
+    //};
+
+    this.Public_FindOutOfBoundContent = function (rows, cols)
+    {
+        var maxArea = CellConfiguration.GetStoryboardContentBounds(rows, cols);
+
+        var toBeDeleted = [];
+        var shapeStates = MyShapesState.Public_GetAllMovableShapeStates(false);
+
+        for (var i = 0; i < shapeStates.length; i++)
+        {
+            var shapeState = shapeStates[i];
+            if (shapeState === null)
+                continue;
+
+
+            //shapeState = MyShapesState.Public_GetShapeStateById(shapeState);
+
+            if (Math.floor(shapeState.Y) >= Math.floor(maxArea.Height) || Math.floor(shapeState.X) >= Math.floor(maxArea.Width))
+            {
+                toBeDeleted.push(shapeState.Id);
+            }
+
+            if (shapeState.Y < 0)   //find content that is above!
+            {
+                try
+                {
+                    var bbBox = shapeState.GetBBox();
+                    if (shapeState.Y + bbBox.height < 0)
+                    {
+                        toBeDeleted.push(shapeState.Id);
+                    }
+                } catch (e)
+                {
+                    LogErrorMessage("StoryboardContainerLibrary.Public_FindOutOfBoundContent.NegativeY", e);
+                }
+            }
+        }
+
+        return toBeDeleted;
+    };
+
+    this.Private_RemoveOutOfBoundsContent = function (rows, cols)
+    {
+        ClearActiveState();
+
+        var toBeDeleted = this.Public_FindOutOfBoundContent(rows, cols)
+
+        for (i = 0; i < toBeDeleted.length; i++)
+        {
+            var shapeId = toBeDeleted[i];
+            MyShapesState.Public_RemoveShapeStateById(shapeId);
+            $("#" + shapeId).remove();
+        }
+    };
+
+    this.Private_CreateCell = function (row, col)
+    {
+        var cellPosition = CellConfiguration.GetCellPartPosition(StoryboardPartTypeEnum.StoryboardCell, row, col)
+
+
+        var shape = SvgCreator.AddRect(cellPosition.X, cellPosition.Y, cellPosition.Width, cellPosition.Height, CellConfiguration.Stroke, CellConfiguration.Fill, CellConfiguration.StrokeDashArray, CellConfiguration.Opacity);
+        shape.setAttributeNS(null, "stroke-width", CellConfiguration.StrokeWidth);
+        shape.setAttributeNS(null, "rx", CellConfiguration.Rx);
+        shape.setAttributeNS(null, "ry", CellConfiguration.Ry);
+        shape.setAttributeNS(null, "id", MyIdGenerator.GenerateCellId(row, col));
+
+        MyPointers.CellContainer.append(shape);
+
+        if (CellConfiguration.HasTitle)
+        {
+            this.Private_AddTextable(MyIdGenerator.GenerateTitleCellId(row, col), row, col, CellConfiguration.TitleLayout, this.Private_GetAreaGroup(this.Private_TitleGroup), CellConfiguration.GetCellTitleOverrideText(row, col));
+        }
+
+        if (CellConfiguration.HasDescription)
+        {
+            this.Private_AddTextable(MyIdGenerator.GenerateDescriptionCellId(row, col), row, col, CellConfiguration.DescriptionLayout, this.Private_GetAreaGroup(this.Private_DescriptionGroup));
+        }
+    };
+
+
+
+    // Use this to back update old storyboards
+    this.Private_MoveAllArtUp = function ()
+    {
+        var shapeStates = MyShapesState.Public_GetAllMovableShapeStates(false);
+        for (var i = 0; i < shapeStates.length; i++)
+        {
+            var shapeState = shapeStates[i];
+            if (shapeState === null)
+                continue;
+
+
+
+            shapeState.Y -= 10;
+            shapeState.UpdateDrawing();
+        }
+    };
+
+    // this is going to break - may make a call, no longer supporting old storyboards -abs 1/3/15
+    this.Private_UpdateOldCellIds = function ()
+    {
+        var row1Y = CellConfiguration.Row1PaddingTop + CellConfiguration.CellPaddingTop;
+        var row2Y = CellConfiguration.FullRowHeight() + CellConfiguration.CellPaddingTop;
+
+        var cell1 = $("#CellDefinition").children()[0];
+        var cell2 = $("#CellDefinition").children()[1];
+        var cell3 = $("#CellDefinition").children()[2];
+        var cell4 = $("#Cell4");
+        var cell5 = $("#Cell5");
+        var cell6 = $("#Cell6");
+
+
+        cell1.setAttributeNS(null, "id", MyIdGenerator.GenerateCellId(0, 0));
+        cell2.setAttributeNS(null, "id", MyIdGenerator.GenerateCellId(0, 1));
+        cell3.setAttributeNS(null, "id", MyIdGenerator.GenerateCellId(0, 2));
+
+        cell1.setAttributeNS(null, "y", row1Y);
+        cell2.setAttributeNS(null, "y", row1Y);
+        cell3.setAttributeNS(null, "y", row1Y);
+
+        if (cell4.length > 0)
+        {
+            //cell4.setAttributeNS(null, "id", this.GenerateCellId(1, 0));
+            //cell4.setAttributeNS(null, "y", row2Y);
+            cell4.attr("id", MyIdGenerator.GenerateCellId(1, 0));
+            cell4.attr("y", row2Y);
+        }
+
+        if (cell5.length > 0)
+        {
+            //cell5.setAttributeNS(null, "id", this.GenerateCellId(1, 1));
+            //cell5.setAttributeNS(null, "y", row2Y);
+            cell5.attr("id", MyIdGenerator.GenerateCellId(1, 1));
+            cell5.attr("y", row2Y);
+        }
+
+        if (cell6.length > 0)
+        {
+            //cell6.setAttributeNS(null, "id", this.GenerateCellId(1, 2));
+            //cell6.setAttributeNS(null, "y", row2Y);
+            cell6.attr("id", MyIdGenerator.GenerateCellId(1, 2));
+            cell6.attr("y", row2Y);
+        }
+
+    };
+
+    this.Private_AddTextable = function (baseId, row, col, textLayout, appendTo, overrideText)
+    {
+        if (textLayout == null)
+            return;
+
+        var position = CellConfiguration.GetCellPartPosition(textLayout.StoryboardPartType, row, col);
+        if (position == null)
+            return;
+
+        var textGroupId = baseId;
+        var textGroupScaleId = textGroupId + "_scale";
+        var textGroupNaturalId = textGroupId + "_natural";
+
+        var textGroupOuterId = textLayout.FillColor.ColorScheme + "_" + textGroupId + "_outer";
+
+        var textGroupTextRectId = textGroupId + "_text";
+
+
+
+        var textGroup = SvgCreator.CreateSvgGroup(textGroupId);
+        var textGroupScale = SvgCreator.CreateSvgGroup(textGroupScaleId);
+        var textGroupNatural = SvgCreator.CreateSvgGroup(textGroupNaturalId);
+
+        var outerRect = SvgCreator.AddRect(0, 0, position.Width, position.Height, textLayout.Stroke, textLayout.FillColor.Color, null, CellConfiguration.Opacity, textGroupOuterId);
+        outerRect.setAttributeNS(null, "stroke-width", textLayout.StrokeWidth);
+        outerRect.setAttributeNS(null, "rx", textLayout.RoundedCornerRadius);
+        outerRect.setAttributeNS(null, "ry", textLayout.RoundedCornerRadius);
+
+        var textPadding = textLayout.TextPadding;
+        
+        var textRect = SvgCreator.AddRect(textPadding, textPadding, position.Width - (2 * textPadding), position.Height - (2 * textPadding), null, "none", null, CellConfiguration.Opacity, textGroupTextRectId);
+        
+        var metaData = SvgCreator.CreateMetadata();
+        metaData.appendChild(SvgCreator.CreateTextableMetadata(textGroupTextRectId));
+        metaData.appendChild(SvgCreator.CreateColorableMetadata(textLayout.FillColor.Color, textLayout.FillColor.Color, textLayout.FillColor.ColorScheme, textLayout.FillColor.ColorTitle));
+        //metaData.appendChild(SvgCreator.CreateColorableMetadata(textLayout.BorderColor.Color, textLayout.BorderColor.Color, textLayout.BorderColor.ColorScheme, textLayout.BorderColor.ColorTitle));
+
+        textGroup.appendChild(metaData);
+        textGroup.appendChild(textGroupScale);
+
+        textGroupScale.appendChild(textGroupNatural);
+
+        textGroupNatural.appendChild(outerRect);
+        //textGroupNatural.appendChild(innerRect);
+        textGroupNatural.appendChild(textRect);
+
+        //this.Private_GetTitleTextGroup().append(textGroup);
+        appendTo.append(textGroup);
+
+
+        var oldShapeState = MyShapesState.Public_GetShapeStateById(textGroupId);
+        var shapeState = new SvgState(textGroupId);
+        shapeState.TextState.Text = overrideText || textLayout.DefaultText;
+        shapeState.TextState.DefaultText = textLayout.DefaultText;
+        shapeState.TextState.Font = textLayout.DefaultFont;
+        shapeState.TextState.FontSize = textLayout.DefaultFontSize;
+        shapeState.TextState.FontColor = textLayout.DefaultFontColor;
+        shapeState.TextState.TextAlignment = textLayout.TextAlignment || "middle";
+        shapeState.Angle = textLayout.Rotation || 0; // or 0 in case a textlayout does not define rotation.
+
+        if (UseQuill || UseSummerNote)
+        {
+            //beyond lazy code to handle image attributions and use slower conversion process
+            if (shapeState.TextState.Text.indexOf("\n") >= 0)
+            {
+                shapeState.TextState.Public_ConvertToQuill();
+            }
+            else
+            
+                shapeState.TextState.Public_GenerateQuillForOneLiner(shapeState.TextState.Text, shapeState.TextState.FontSize, shapeState.TextState.TextAlignment, shapeState.TextState.Font, shapeState.TextState.FontColor  );
+            
+        }
+        
+
+        shapeState.Movable = false;
+        
+
+        if (oldShapeState != null)
+        {
+            //nastiness of default text vs override text
+            if (oldShapeState.TextState.Text == shapeState.TextState.DefaultText || textLayout.ForceTextOverride)
+                oldShapeState.TextState.Text = shapeState.TextState.Text;
+
+            //this ends up copying the old text from the attribution and it never gets updated...  seems f'ed up... abs 3/14/17'
+            if (baseId.indexOf("attribution")<=0)
+            {
+                shapeState.TextState.CopyFontStyles(oldShapeState.TextState);
+                shapeState.ColorableState.Public_Copy(oldShapeState.ColorableState);
+            }
+        }
+
+        MyShapesState.Public_SetShapeState(textGroupId, shapeState);
+
+        shapeState.MoveTo(position.X, position.Y);
+        shapeState.UpdateDrawing();
+
+        if (textLayout.AllowEditting)
+        {
+            $(textGroup).attr("class", "activeShape");
+            $(textGroup).off("mousedown").on("mousedown", ShapeSelected);
+            $(textGroup).off("mouseup").on("mouseup", HandleMouseExit);
+        }
+        else
+        {
+            $(textGroup).css("cursor", "default");
+        }
+    };
+
+
+    this.Private_GetAreaGroup = function (groupName)
+    {
+        var areaGroup = $("#" + groupName);
+
+        if (areaGroup.length == 0)
+        {
+            areaGroup = SvgCreator.CreateSvgGroup(groupName);
+            MyPointers.CellContainer.append(areaGroup);
+            areaGroup = $("#" + groupName);
+        }
+        return areaGroup;
+    };
+
+    this.Private_GetScrollBarWidth =function() {
+        var $outer = $('<div>').css({visibility: 'hidden', width: 100, overflow: 'scroll'}).appendTo('body'),
+            widthWithScroll = $('<div>').css({width: '100%'}).appendTo($outer).outerWidth();
+        $outer.remove();
+        return 100 - widthWithScroll;
+    };
+
+
+    /* End Privates */
+}
+

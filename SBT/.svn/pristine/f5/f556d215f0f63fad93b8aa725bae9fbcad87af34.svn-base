@@ -1,0 +1,51 @@
+﻿tbody tr:nth-child(even) td, tbody tr.even td {background:#e5ecf9;}
+
+.ReportTable td 
+{
+    padding: 3px 3px;
+}
+.ReportTable th
+{
+    background-color:silver;
+}
+
+.NumberCol
+{
+    text-align:right;
+}
+
+.EmbeddedTable
+{
+    background-color:white;
+    margin:0px;
+    padding:3px;
+    border: none;
+    font-size: 10px;
+    border-spacing:0;
+}
+
+.EmbeddedTable tr
+{
+    background-color:white;
+    margin: 0px;
+    padding:0;
+}
+
+.EmbeddedTable tr td
+{
+    padding:3px;
+    margin:0;
+    background-color:white;
+    border: 1px solid black;
+    font-size: 14px
+}
+
+.text-box {
+    width:1200px;
+    margin-bottom:10px;
+}
+
+.Overlay {
+    position: relative;
+    z-index: 10;
+}

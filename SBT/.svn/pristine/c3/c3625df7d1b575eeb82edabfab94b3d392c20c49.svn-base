@@ -1,0 +1,159 @@
+﻿/// <reference path="../svgManip.js" />
+
+function TextControlsBox()
+{
+    this.Private_ActiveShapeId = "";
+
+    this.HideTextControlsBox = function ()
+    {
+        MyPointers.Controls_TextableControls.css("display", "none");
+        this.Private_ActiveShapeId = "";
+
+    };
+
+    this.Private_ResetColorSelector = function ()
+    {
+        MyPointers.Controls_TextableControls_ColorSelector.spectrum(
+            {
+                color: "#ccc",
+                showInput: true,
+                showAlpha: false,
+                showPalette: true,
+                localStorageKey: "StoryboardThat",
+                clickoutFiresChange: true,
+                showInitial: true,
+                change: UpdateFontColor,
+                move: PreviewUpdateFontColor,
+                hide: UpdateFontColorHidden,
+            });
+    };
+
+    // this method gets called WAY TOO MUCH abs 4/26/14
+    this.PrepTextControls = function (textableControls, left, top, activeShape)
+    {
+        try
+        {
+            try
+            {
+                if (UseQuill)
+                { 
+                    var updateQuill = true;
+                    var resetToDefaults = (activeShape.TextState.Public_GetQuillDeltas() === null);
+
+                    if (activeShape.TextState.Public_GetQuillDeltas() === null && quill.getLength() == 1)
+                    {
+                        updateQuill = false;
+                    }
+                    if (updateQuill && SbtLib.DeepCompareEquality(activeShape.TextState.Public_GetQuillDeltas(), quill.getContents().ops))
+                        updateQuill = false;
+
+                    if (updateQuill)
+                    {
+                        quill.setContents(activeShape.TextState.Public_GetQuillDeltas());
+                    }
+                    if (resetToDefaults)
+                    {
+                        SbtQuillHelper.ResetToDefaults();
+                    }
+                    SbtQuillHelper.HandleWhiteText();
+
+                }
+            } catch (e)
+            {
+                LogErrorMessage("TextControlBox.PrepTextContros", e);
+            }
+            try
+            { 
+                if (UseSummerNote)
+                {
+                    // if (this.Private_ActiveShapeId == activeShape.Id)
+                    //     return;
+
+                    SbtSummerNoteHelper.InitSummerNoteIfNeeded();
+
+                   
+                    var updateTextEditor = true;
+                    var resetToDefaults = (activeShape.TextState.Public_GetQuillDeltas() === null);
+
+                    if (activeShape.TextState.Public_GetQuillDeltas() === null && SbtSummerNoteHelper.IsDefault())
+                    {
+                        updateTextEditor = false;
+                    }
+                    if (updateTextEditor && SbtLib.DeepCompareEquality(activeShape.TextState.Public_GetQuillDeltas(), SbtSummerNoteHelper.GetDeltas()))
+                        updateTextEditor = false;
+
+                    if (resetToDefaults)
+                    {
+                        SbtSummerNoteHelper.ResetToDefaults();
+                    }
+                    else if (updateTextEditor)
+                    {
+                        SbtSummerNoteHelper.UpdateForDeltas(activeShape.TextState.Public_GetQuillDeltas());
+                    }
+                  
+                    SbtSummerNoteHelper.HandleWhiteText();
+
+                }
+            } catch (e)
+            {
+                LogErrorMessage("TextControlBox.PrepTextControls Summer: " + e);
+
+            }
+
+
+            DebugLine('left top');
+            textableControls.css("left", left);
+            textableControls.css("top", top);
+
+            DebugLine(textableControls);
+
+            // Don't reset the values unless we need to!
+            if (this.Private_ActiveShapeId != activeShape.Id)
+            {
+                //setting CSS removes focus from text area...
+                textableControls.css("display", "block");
+
+                if (UseQuill == false && UseSummerNote == false)
+                {
+                    var sizeSelector = $("#sizeSelector");
+
+                    MyPointers.Controls_TextableControls_TextArea.val(activeShape.TextState.Text);
+                    sizeSelector.val(activeShape.TextState.FontSize);
+                    //SetFontSelection(activeShape.TextState.Font, activeShape.Id);
+
+                    MyPointers.Controls_TextableControls_TextAlignmentSelectors.removeClass("active");
+                    MyPointers.Controls_TextableControls_TextAlignmentSelectors.filter("." + (activeShape.TextState.TextAlignment || "middle")).addClass("active");
+                }
+            }
+            if (UseQuill == false && UseSummerNote == false)
+            {
+
+                this.Private_SetFontSelector(activeShape.TextState.Font); // lazy solution to make it work for undo...  will it bite me?
+
+
+                MyPointers.Controls_TextableControls_ColorSelector.spectrum("set", activeShape.TextState.FontColor);
+
+                if (MyPointers.Controls_TextableControls_TextArea.is(":focus") == false)
+                {
+                    MyPointers.Controls_TextableControls_TextArea.focus();
+                }
+
+
+                this.Private_ResetColorSelector();
+            }
+
+            this.Private_ActiveShapeId = activeShape.Id;
+
+        }
+        catch (ex)
+        {
+            LogErrorMessage("TextControlsBox.PrepTextControls " + ex);
+        }
+    };
+
+    this.Private_SetFontSelector = function (fontName)
+    {
+        MyPointers.Controls_TextableControls_FontSelector.fontSelector("UpdateDisplayName", fontName);
+    };
+
+}
